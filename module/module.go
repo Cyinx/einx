@@ -31,7 +31,7 @@ type Module interface {
 	Close()
 	GetName() string
 	Run(*sync.WaitGroup)
-	RpcCall(Module, string, []interface{})
+	RpcCall(string, ...interface{})
 	RegisterHandler(ProtoTypeID, MsgHandler)
 	RegisterRpcHandler(string, RpcHandler)
 	AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64
@@ -121,10 +121,10 @@ func (this *module) PostData(event_type EventType, type_id uint16, agent Agent, 
 	this.ev_queue.Push(event)
 }
 
-func (this *module) RpcCall(sender Module, name string, args []interface{}) {
+func (this *module) RpcCall(name string, args ...interface{}) {
 	rpc_msg := this.rpc_msg_pool.Get().(*RpcEventMsg)
 	rpc_msg.MsgType = event.EVENT_MODULE_RPC
-	rpc_msg.Sender = sender
+	rpc_msg.Sender = this
 	rpc_msg.Data = args
 	rpc_msg.RpcName = name
 	this.rpc_chan <- rpc_msg

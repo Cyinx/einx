@@ -46,18 +46,18 @@ func (this *TcpConnAgent) IsClosed() bool {
 	return atomic.CompareAndSwapUint32(&this.close_flag, 1, 1) == true
 }
 
-func (this *TcpConnAgent) WriteMsg(msg_id ProtoTypeID, msg interface{}) bool {
+func (this *TcpConnAgent) WriteMsg(msg MsgWrapper) bool {
 	if this.IsClosed() == true {
 		return false
 	}
 
-	msg_buffer, err := MsgProtoMarshal(msg)
+	msg_buffer, err := MsgProtoMarshal(msg.GetBody())
 	if err != nil {
 		return false
 	}
 
 	wrapper := &WriteWrapper{
-		msg_id: msg_id,
+		msg_id: msg.GetMsgID(),
 		buffer: msg_buffer,
 	}
 
