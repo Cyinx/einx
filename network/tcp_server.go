@@ -7,23 +7,34 @@ import (
 )
 
 type TcpServer struct {
-	listener net.Listener
+	listener     net.Listener
+	component_id ComponentID
+	module       ModuleEventer
+	addr         string
 }
 
-func NewTcpServer() Server {
-	tcp_server := &TcpServer{}
+func NewTcpServer(addr string, m ModuleEventer) Component {
+	tcp_server := &TcpServer{
+		component_id: GenComponentID(),
+		addr:         addr,
+		module:       m,
+	}
 	return tcp_server
 }
 
-func (this *TcpServer) GetType() ServerType {
+func (this *TcpServer) GetID() ComponentID {
+	return this.component_id
+}
+
+func (this *TcpServer) GetType() ComponentType {
 	return ServerType_TCP
 }
 
-func (this *TcpServer) Start(addr string) {
+func (this *TcpServer) Start() {
 
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", this.addr)
 	if err != nil {
-		slog.LogError("tcp_server", "ListenTCP addr:[%s],Error:%s", addr, err.Error())
+		slog.LogError("tcp_server", "ListenTCP addr:[%s],Error:%s", this.addr, err.Error())
 		return
 	}
 	this.listener = listener
@@ -43,11 +54,11 @@ func (this *TcpServer) do_tcp_accept() {
 			return
 		}
 
-		tcp_agent := NewTcpConnAgent(raw_conn)
-		_event_module.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent)
+		tcp_agent := NewTcpConn(raw_conn, this.module)
+		this.module.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
 		go func() {
 			tcp_agent.Run()
-			_event_module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent)
+			this.module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 		}()
 	}
 }

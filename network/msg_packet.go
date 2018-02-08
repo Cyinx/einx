@@ -13,14 +13,13 @@ type IReader interface {
 
 const (
 	MSG_KEY_LENGTH    = 32
-	MSG_TYPE_LENGTH   = 2
 	MSG_HEADER_LENGTH = 4
-	MSG_ID_LENGTH     = 2
+	MSG_ID_LENGTH     = 4
 )
 
 // --------------------------------------------------------------------------------------------------------
 // |                                header              | body                          |
-// | type byte | body_length uint16 | packet_flag uint8 | msg_id uint16| msg_data []byte|
+// | type byte | body_length uint16 | packet_flag uint8 | msg_id uint32| msg_data []byte|
 // --------------------------------------------------------------------------------------------------------
 var msg_header_length int = MSG_HEADER_LENGTH
 
@@ -38,13 +37,13 @@ func ReadBinary(r io.Reader, data interface{}) error {
 	return binary.Read(r, binary.LittleEndian, data)
 }
 
-func UnmarshalMsgBinary(packet *PacketHeader, b []byte) (uint16, interface{}, error) {
-	var msg_id uint16 = 0
-	if len(b) < MSG_TYPE_LENGTH {
+func UnmarshalMsgBinary(packet *PacketHeader, b []byte) (ProtoTypeID, interface{}, error) {
+	var msg_id ProtoTypeID = 0
+	if len(b) < MSG_ID_LENGTH {
 		return 0, nil, errors.New("msg packet length error")
 	}
-	msg_id = uint16(b[0]) | (uint16(b[1]) << 8) //小端
-	msg_body := b[MSG_TYPE_LENGTH:]
+	msg_id = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24 //小端
+	msg_body := b[MSG_ID_LENGTH:]
 	var msg interface{}
 	switch packet.MsgType {
 	case 'P':
@@ -57,7 +56,7 @@ func UnmarshalMsgBinary(packet *PacketHeader, b []byte) (uint16, interface{}, er
 	return msg_id, msg, nil
 }
 
-func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (uint16, interface{}, error) {
+func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (ProtoTypeID, interface{}, error) {
 	if _, err := io.ReadFull(r, header_buffer); err != nil {
 		return 0, nil, err
 	}
@@ -96,9 +95,10 @@ func MarshalMsgBinary(msg_id ProtoTypeID, msg_buffer []byte, b *[]byte) bool {
 	buffer[3] = 0
 
 	//msg wrapper
-
-	buffer[4] = byte(msg_id & 0xFF)
+	buffer[4] = byte(msg_id)
 	buffer[5] = byte(msg_id >> 8)
+	buffer[6] = byte(msg_id >> 16)
+	buffer[7] = byte(msg_id >> 24)
 
 	copy(buffer[MSG_HEADER_LENGTH+MSG_ID_LENGTH:], msg_buffer)
 

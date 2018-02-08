@@ -9,52 +9,41 @@ import (
 	"sync/atomic"
 )
 
-type Agent = agent.Agent
-type AgentID = agent.AgentID
-
-type TcpConnAgent struct {
+type TcpConn struct {
 	agent_id   AgentID
 	conn       net.Conn
 	close_flag uint32
 	write_chan chan *WriteWrapper
 	write_stop chan struct{}
+	module     ModuleEventer
 }
 
-func NewTcpConnAgent(raw_conn net.Conn) Agent {
-	tcp_agent := &TcpConnAgent{
+func NewTcpConn(raw_conn net.Conn, m ModuleEventer) Agent {
+	tcp_agent := &TcpConn{
 		conn:       raw_conn,
 		close_flag: 0,
 		write_chan: make(chan *WriteWrapper, 128),
 		write_stop: make(chan struct{}),
+		agent_id:   agent.GenAgentID(),
+		module:     m,
 	}
 	return tcp_agent
 }
 
-func (this *TcpConnAgent) GetID() AgentID {
+func (this *TcpConn) GetID() AgentID {
 	return this.agent_id
 }
 
-func (this *TcpConnAgent) SetID(id AgentID) {
-	this.agent_id = id
-}
-
-func (this *TcpConnAgent) ReadMsg() ([]byte, error) {
+func (this *TcpConn) ReadMsg() ([]byte, error) {
 	return nil, nil
 }
 
-func (this *TcpConnAgent) IsClosed() bool {
+func (this *TcpConn) IsClosed() bool {
 	return atomic.CompareAndSwapUint32(&this.close_flag, 1, 1) == true
 }
 
-func (this *TcpConnAgent) WriteMsg(msg interface{}) bool {
+func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, msg interface{}) bool {
 	if this.IsClosed() == true {
-		return false
-	}
-
-	var msg_id ProtoTypeID
-	var ok bool
-	if msg_id, ok = GetMsgID(msg); ok == false {
-		slog.LogWarning("tcp_conn", "msg id not exist")
 		return false
 	}
 
@@ -76,15 +65,15 @@ func (this *TcpConnAgent) WriteMsg(msg interface{}) bool {
 	return true
 }
 
-func (this *TcpConnAgent) LocalAddr() net.Addr {
+func (this *TcpConn) LocalAddr() net.Addr {
 	return nil
 }
 
-func (this *TcpConnAgent) RemoteAddr() net.Addr {
+func (this *TcpConn) RemoteAddr() net.Addr {
 	return nil
 }
 
-func (this *TcpConnAgent) Close() {
+func (this *TcpConn) Close() {
 	if atomic.CompareAndSwapUint32(&this.close_flag, 0, 1) == true {
 		this.write_chan <- nil
 		this.conn.Close()
@@ -92,11 +81,11 @@ func (this *TcpConnAgent) Close() {
 	}
 }
 
-func (this *TcpConnAgent) Destroy() {
+func (this *TcpConn) Destroy() {
 
 }
 
-func (this *TcpConnAgent) Run() {
+func (this *TcpConn) Run() {
 	go this.WriteGoroutine()
 
 	tcp_conn := this.conn
@@ -112,7 +101,7 @@ func (this *TcpConnAgent) Run() {
 		}
 		switch packet.MsgType {
 		case 'P':
-			_event_module.PostData(event.EVENT_TCP_READ_MSG, msg_id, this, msg)
+			this.module.PostData(event.EVENT_TCP_READ_MSG, msg_id, this, msg)
 		case 'R':
 			msg = nil
 		default:
@@ -126,7 +115,7 @@ wait_close:
 
 }
 
-func (this *TcpConnAgent) WriteGoroutine() {
+func (this *TcpConn) WriteGoroutine() {
 	write_buffer := make([]byte, 512)
 	tcp_conn := this.conn
 
@@ -146,7 +135,7 @@ wait_close:
 	close(this.write_stop)
 }
 
-func (this *TcpConnAgent) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]byte) bool {
+func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]byte) bool {
 	if MarshalMsgBinary(msg.msg_id, msg.buffer, write_buffer) == true {
 		_, err := w.Write(*write_buffer)
 		if err == nil {

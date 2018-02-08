@@ -2,30 +2,58 @@ package event
 
 import (
 	"github.com/Cyinx/einx/agent"
+	"github.com/Cyinx/einx/component"
 )
 
 type Agent = agent.Agent
-type EventType int
+type ProtoTypeID = agent.ProtoTypeID
+type Component = component.Component
+type ComponentID = component.ComponentID
+type EventType = int
 
 const (
 	EVENT_NONE EventType = iota
 	EVENT_TCP_CONNECTED
+	EVENT_TCP_CONNECT_FAILED
 	EVENT_TCP_ACCEPTED
 	EVENT_TCP_READ_MSG
 	EVENT_TCP_READ
 	EVENT_TCP_WRITE
 	EVENT_TCP_CLOSED
 	EVENT_MODULE_RPC
+	EVENT_COMPONENT_CREATE
 )
 
 type EventMsg interface {
 	GetType() EventType
 	GetSender() interface{}
+	Reset()
+}
+
+type ComponentEventMsg struct {
+	MsgType EventType
+	Sender  Component
+	Attach  interface{}
+}
+
+func (this *ComponentEventMsg) GetType() EventType {
+	return this.MsgType
+}
+
+func (this *ComponentEventMsg) GetSender() interface{} {
+	return this.Sender
+}
+
+func (this *ComponentEventMsg) Reset() {
+	this.MsgType = 0
+	this.Sender = nil
+	this.Attach = nil
 }
 
 type SessionEventMsg struct {
 	MsgType EventType
 	Sender  Agent
+	Cid     ComponentID
 }
 
 func (this *SessionEventMsg) GetType() EventType {
@@ -36,10 +64,16 @@ func (this *SessionEventMsg) GetSender() interface{} {
 	return this.Sender
 }
 
+func (this *SessionEventMsg) Reset() {
+	this.MsgType = 0
+	this.Sender = nil
+	this.Cid = 0
+}
+
 type DataEventMsg struct {
 	MsgType EventType
 	Sender  Agent
-	TypeID  uint16
+	TypeID  ProtoTypeID
 	MsgData interface{}
 }
 
@@ -49,6 +83,13 @@ func (this *DataEventMsg) GetType() EventType {
 
 func (this *DataEventMsg) GetSender() interface{} {
 	return this.Sender
+}
+
+func (this *DataEventMsg) Reset() {
+	this.MsgType = 0
+	this.Sender = nil
+	this.TypeID = 0
+	this.MsgData = nil
 }
 
 type RpcEventMsg struct {
@@ -64,4 +105,11 @@ func (this *RpcEventMsg) GetType() EventType {
 
 func (this *RpcEventMsg) GetSender() interface{} {
 	return this.Sender
+}
+
+func (this *RpcEventMsg) Reset() {
+	this.MsgType = 0
+	this.Sender = nil
+	this.RpcName = ""
+	this.Data = nil
 }

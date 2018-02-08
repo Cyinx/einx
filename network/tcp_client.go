@@ -4,8 +4,6 @@ import (
 	"github.com/Cyinx/einx/event"
 	"github.com/Cyinx/einx/slog"
 	"net"
-	//"sync/atomic"
-	"time"
 )
 
 type TcpClient struct {
@@ -13,16 +11,24 @@ type TcpClient struct {
 	ConnectInterval uint16
 	close_flag      uint32
 	tcp_agent       Agent
+	component_id    ComponentID
+	module          ModuleEventer
 }
 
-func NewTcpClient(addr string) Client {
+func NewTcpClient(addr string, m ModuleEventer) Component {
 	tcp_client := &TcpClient{
 		Connect_Addr: addr,
+		module:       m,
+		component_id: GenComponentID(),
 	}
 	return tcp_client
 }
 
-func (this *TcpClient) GetType() ClientType {
+func (this *TcpClient) GetID() ComponentID {
+	return this.component_id
+}
+
+func (this *TcpClient) GetType() ComponentType {
 	return ClientType_TCP
 }
 
@@ -30,36 +36,28 @@ func (this *TcpClient) Start() {
 	this.connect()
 }
 
-func (this *TcpClient) dial() net.Conn {
-	for {
-		conn, err := net.Dial("tcp", this.Connect_Addr)
-		if err == nil {
-			return conn
-		}
+func (this *TcpClient) Close() {
+	this.tcp_agent.Close()
+}
 
-		slog.LogWarning("tcp_client", "connect to %s error: %s", this.Connect_Addr, err)
-		time.Sleep(5 * time.Second)
-		continue
-	}
+func (this *TcpClient) dial() (net.Conn, error) {
+	return net.Dial("tcp", this.Connect_Addr)
 }
 
 func (this *TcpClient) connect() {
-	raw_conn := this.dial()
-	if raw_conn == nil {
+	raw_conn, err := this.dial()
+	if err != nil {
+		slog.LogWarning("tcp_client", "tcp connect failed %v", err)
+		this.module.PostEvent(event.EVENT_TCP_CONNECT_FAILED, nil, this.component_id)
 		return
 	}
 
-	tcp_agent := NewTcpConnAgent(raw_conn)
+	tcp_agent := NewTcpConn(raw_conn, this.module)
 	this.tcp_agent = tcp_agent
-	_event_module.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent)
+	this.module.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
 
 	go func() {
 		tcp_agent.Run()
-
-		_event_module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent)
-
-		time.Sleep(5 * time.Second)
-		slog.LogWarning("tcp_client", "正在重连接到 %s", this.Connect_Addr)
-		this.connect()
+		this.module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 	}()
 }
