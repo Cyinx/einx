@@ -10,22 +10,24 @@ import (
 )
 
 type TcpConn struct {
-	agent_id   AgentID
-	conn       net.Conn
-	close_flag uint32
-	write_chan chan *WriteWrapper
-	write_stop chan struct{}
-	module     ModuleEventer
+	agent_id       AgentID
+	conn           net.Conn
+	close_flag     uint32
+	write_chan     chan *WriteWrapper
+	write_stop     chan struct{}
+	module         ModuleEventer
+	last_ping_tick int64
 }
 
 func NewTcpConn(raw_conn net.Conn, m ModuleEventer) Agent {
 	tcp_agent := &TcpConn{
-		conn:       raw_conn,
-		close_flag: 0,
-		write_chan: make(chan *WriteWrapper, 128),
-		write_stop: make(chan struct{}),
-		agent_id:   agent.GenAgentID(),
-		module:     m,
+		conn:           raw_conn,
+		close_flag:     0,
+		write_chan:     make(chan *WriteWrapper, 128),
+		write_stop:     make(chan struct{}),
+		agent_id:       agent.GenAgentID(),
+		module:         m,
+		last_ping_tick: 0,
 	}
 	return tcp_agent
 }
@@ -42,6 +44,15 @@ func (this *TcpConn) IsClosed() bool {
 	return atomic.CompareAndSwapUint32(&this.close_flag, 1, 1) == true
 }
 
+func (this *TcpConn) do_push_write(wrapper *WriteWrapper) bool {
+	select {
+	case <-this.write_stop:
+		return false
+	case this.write_chan <- wrapper:
+	}
+	return true
+}
+
 func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, msg interface{}) bool {
 	if this.IsClosed() == true {
 		return false
@@ -53,16 +64,11 @@ func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, msg interface{}) bool {
 	}
 
 	wrapper := &WriteWrapper{
-		msg_id: msg_id,
-		buffer: msg_buffer,
+		msg_type: 'P',
+		msg_id:   msg_id,
+		buffer:   msg_buffer,
 	}
-
-	select {
-	case <-this.write_stop:
-		return false
-	case this.write_chan <- wrapper:
-	}
-	return true
+	return this.do_push_write(wrapper)
 }
 
 func (this *TcpConn) LocalAddr() net.Addr {
@@ -78,6 +84,7 @@ func (this *TcpConn) Close() {
 		this.write_chan <- nil
 		this.conn.Close()
 		this.conn = nil
+		this.Destroy()
 	}
 }
 
@@ -102,17 +109,20 @@ func (this *TcpConn) Run() {
 		switch packet.MsgType {
 		case 'P':
 			this.module.PostData(event.EVENT_TCP_READ_MSG, msg_id, this, msg)
+			break
 		case 'R':
 			msg = nil
+			break
+		case 'T':
+			this.last_ping_tick = NowKeepAliveTick
+			break
 		default:
 			goto wait_close
 		}
 	}
 
 wait_close:
-	slog.LogInfo("tcp", "Recv Close")
 	this.Close()
-
 }
 
 func (this *TcpConn) WriteGoroutine() {
@@ -131,17 +141,39 @@ func (this *TcpConn) WriteGoroutine() {
 	}
 
 wait_close:
-	slog.LogInfo("tcp", "Writer Close")
 	close(this.write_stop)
 }
 
 func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]byte) bool {
-	if MarshalMsgBinary(msg.msg_id, msg.buffer, write_buffer) == true {
-		_, err := w.Write(*write_buffer)
-		if err == nil {
-			return true
+	switch msg.msg_type {
+	case 'P', 'R':
+		if MarshalMsgBinary(msg.msg_id, msg.buffer, write_buffer) == false {
+			return false
 		}
-		slog.LogInfo("tcp", "write msg error %s", err.Error())
+	case 'T':
+		MarshalKeepAliveMsgBinary(write_buffer)
+	default:
+		return false
 	}
+	_, err := w.Write(*write_buffer)
+	if err == nil {
+		return true
+	}
+	slog.LogInfo("tcp", "write msg error %s", err.Error())
 	return false
+}
+
+func (this *TcpConn) Ping() {
+	wrapper := &WriteWrapper{
+		msg_type: 'T',
+		msg_id:   0,
+		buffer:   nil,
+	}
+	this.do_push_write(wrapper)
+}
+
+func (this *TcpConn) Pong() {
+	if NowKeepAliveTick-this.last_ping_tick > 20 {
+
+	}
 }

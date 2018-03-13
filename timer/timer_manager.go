@@ -38,7 +38,7 @@ func (this *TimerManager) GetSeqID() uint32 {
 	return this.seqIDIndex
 }
 
-func (this *TimerManager) AddTimer(delay uint64, op TimerHandler, args []interface{}) uint64 {
+func (this *TimerManager) AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64 {
 	seqID := this.GetSeqID()
 
 	if delay < 0 {

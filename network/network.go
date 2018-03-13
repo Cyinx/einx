@@ -34,6 +34,11 @@ type Server interface {
 	Close()
 }
 
+type Linker interface {
+	Ping()
+	Pong()
+}
+
 type Client interface {
 	GetID() ComponentID
 	GetType() ComponentType
@@ -48,6 +53,7 @@ const (
 )
 
 type WriteWrapper struct {
-	msg_id ProtoTypeID
-	buffer []byte
+	msg_type byte
+	msg_id   ProtoTypeID
+	buffer   []byte
 }

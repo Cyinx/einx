@@ -3,6 +3,7 @@ package einx
 import (
 	"github.com/Cyinx/einx/console"
 	"github.com/Cyinx/einx/event"
+	"github.com/Cyinx/einx/lua"
 	"github.com/Cyinx/einx/module"
 	"github.com/Cyinx/einx/network"
 	"github.com/Cyinx/einx/slog"
@@ -18,7 +19,11 @@ func GetModule(name string) Module {
 	return module.GetModule(name)
 }
 
-func AddTcpServer(m module.Module, addr string, mgr AgentSesMgr) {
+func NewLuaStae() *lua.LuaRuntime {
+	return lua.NewLuaStae()
+}
+
+func AddTcpServer(m module.Module, addr string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
 	tcp_server := network.NewTcpServer(addr, m_eventer)
 	e := &event.ComponentEventMsg{}
@@ -28,7 +33,7 @@ func AddTcpServer(m module.Module, addr string, mgr AgentSesMgr) {
 	m_eventer.PushEventMsg(e)
 }
 
-func StartTcpClient(m module.Module, addr string, mgr AgentSesMgr) {
+func StartTcpClient(m module.Module, addr string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
 	tcp_client := network.NewTcpClient(addr, m_eventer)
 	e := &event.ComponentEventMsg{}

@@ -16,9 +16,10 @@ const RPC_CHAN_LENGTH = 512
 
 type Agent = agent.Agent
 type AgentID = agent.AgentID
-type AgentSesMgr = agent.AgentSesMgr
+type AgentSessionMgr = agent.AgentSessionMgr
 type Component = component.Component
 type ComponentID = component.ComponentID
+type ComponentMgr = component.ComponentMgr
 type EventMsg = event.EventMsg
 type EventType = event.EventType
 type ComponentEventMsg = event.ComponentEventMsg
@@ -58,7 +59,7 @@ type module struct {
 	msg_handler_map map[ProtoTypeID]MsgHandler
 	rpc_handler_map map[string]RpcHandler
 	agent_map       map[AgentID]Agent
-	sesmgr_map      map[ComponentID]AgentSesMgr
+	commgr_map      map[ComponentID]interface{}
 	component_map   map[ComponentID]Component
 	rpc_msg_pool    *sync.Pool
 	data_msg_pool   *sync.Pool
@@ -216,16 +217,18 @@ func (this *module) handle_component_event(event_msg EventMsg) {
 	}
 
 	this.component_map[c.GetID()] = c
-	this.sesmgr_map[c.GetID()] = com_event.Attach.(AgentSesMgr)
-	c.Start()
+	this.commgr_map[c.GetID()] = com_event.Attach
+	mgr := com_event.Attach.(ComponentMgr)
+	mgr.OnComponentCreate(c.GetID(), c)
 }
 
 func (this *module) handle_agent_enter(event_msg EventMsg) {
 	ses_event := event_msg.(*SessionEventMsg)
 	agent := ses_event.Sender.(Agent)
 	this.agent_map[agent.GetID()] = agent
-	if sesmgr, ok := this.sesmgr_map[ses_event.Cid]; ok == true {
-		sesmgr.OnAgentEnter(agent.GetID(), agent)
+
+	if sesmgr, ok := this.commgr_map[ses_event.Cid]; ok == true {
+		sesmgr.(AgentSessionMgr).OnAgentEnter(agent.GetID(), agent)
 		return
 	}
 	slog.LogError("agent", "module[%v] agent enter not found component[%v]", this.name, ses_event.Cid)
@@ -234,11 +237,11 @@ func (this *module) handle_agent_enter(event_msg EventMsg) {
 func (this *module) handle_agent_closed(event_msg EventMsg) {
 	ses_event := event_msg.(*SessionEventMsg)
 	agent := ses_event.Sender.(Agent)
-	if sesmgr, ok := this.sesmgr_map[ses_event.Cid]; ok == true {
-		sesmgr.OnAgentExit(agent.GetID(), agent)
+	delete(this.agent_map, agent.GetID())
+	if sesmgr, ok := this.commgr_map[ses_event.Cid]; ok == true {
+		sesmgr.(AgentSessionMgr).OnAgentExit(agent.GetID(), agent)
 		return
 	}
-	delete(this.agent_map, agent.GetID())
 	slog.LogError("agent", "module[%v] agent closed not found component[%v]", this.name, ses_event.Cid)
 }
 

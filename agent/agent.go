@@ -16,10 +16,9 @@ type Agent interface {
 	Destroy()
 }
 
-type AgentSesMgr interface {
+type AgentSessionMgr interface {
 	OnAgentEnter(AgentID, Agent)
 	OnAgentExit(AgentID, Agent)
-	OnMgrError(EventType, error)
 }
 
 var agent_id uint64 = 0

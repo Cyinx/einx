@@ -57,7 +57,9 @@ func (this *TcpClient) connect() {
 	this.module.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
 
 	go func() {
+		AddPing(tcp_agent.(*TcpConn))
 		tcp_agent.Run()
+		RemovePing(tcp_agent.(*TcpConn))
 		this.module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 	}()
 }

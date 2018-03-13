@@ -37,7 +37,7 @@ func GetModule(name string) Module {
 			msg_handler_map: make(map[ProtoTypeID]MsgHandler),
 			rpc_handler_map: make(map[string]RpcHandler),
 			agent_map:       make(map[AgentID]Agent),
-			sesmgr_map:      make(map[ComponentID]AgentSesMgr),
+			commgr_map:      make(map[ComponentID]interface{}),
 			component_map:   make(map[ComponentID]Component),
 			rpc_msg_pool:    &sync.Pool{New: func() interface{} { return new(RpcEventMsg) }},
 			data_msg_pool:   &sync.Pool{New: func() interface{} { return new(DataEventMsg) }},

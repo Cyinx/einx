@@ -48,8 +48,10 @@ func UnmarshalMsgBinary(packet *PacketHeader, b []byte) (ProtoTypeID, interface{
 	switch packet.MsgType {
 	case 'P':
 		msg = MsgProtoUnmarshal(msg_id, msg_body)
+		break
 	case 'R':
 		msg = nil
+		break
 	default:
 		break
 	}
@@ -65,16 +67,24 @@ func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, 
 	msg_packet.BodyLength = uint16(header_buffer[1]) | (uint16(header_buffer[2]) << 8) //小端
 	msg_packet.PacketFlag = header_buffer[3]
 
-	if cap(*b) < int(msg_packet.BodyLength) {
-		*b = make([]byte, msg_packet.BodyLength)
-	} else {
-		*b = (*b)[0:msg_packet.BodyLength]
-	}
+	switch msg_packet.MsgType {
+	case 'P', 'R':
+		if cap(*b) < int(msg_packet.BodyLength) {
+			*b = make([]byte, msg_packet.BodyLength)
+		} else {
+			*b = (*b)[0:msg_packet.BodyLength]
+		}
 
-	if _, err := io.ReadFull(r, *b); err != nil {
-		return 0, nil, err
+		if _, err := io.ReadFull(r, *b); err != nil {
+			return 0, nil, err
+		}
+		return UnmarshalMsgBinary(msg_packet, *b)
+	case 'T':
+		return 0, nil, nil
+	default:
+		break
 	}
-	return UnmarshalMsgBinary(msg_packet, *b)
+	return 0, nil, errors.New("unknow msg packet")
 }
 
 func MarshalMsgBinary(msg_id ProtoTypeID, msg_buffer []byte, b *[]byte) bool {
@@ -103,4 +113,20 @@ func MarshalMsgBinary(msg_id ProtoTypeID, msg_buffer []byte, b *[]byte) bool {
 	copy(buffer[MSG_HEADER_LENGTH+MSG_ID_LENGTH:], msg_buffer)
 
 	return true
+}
+
+func MarshalKeepAliveMsgBinary(b *[]byte) {
+
+	if cap(*b) < MSG_HEADER_LENGTH {
+		*b = make([]byte, MSG_HEADER_LENGTH)
+	} else {
+		*b = (*b)[:MSG_HEADER_LENGTH]
+	}
+
+	buffer := *b
+	//packet header
+	buffer[0] = 'T'
+	buffer[1] = 0
+	buffer[2] = 0
+	buffer[3] = 0
 }

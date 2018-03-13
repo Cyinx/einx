@@ -57,7 +57,9 @@ func (this *TcpServer) do_tcp_accept() {
 		tcp_agent := NewTcpConn(raw_conn, this.module)
 		this.module.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
 		go func() {
+			AddPong(tcp_agent.(*TcpConn))
 			tcp_agent.Run()
+			RemovePong(tcp_agent.(*TcpConn))
 			this.module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 		}()
 	}
