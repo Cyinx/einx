@@ -1,6 +1,7 @@
 package lua_state
 
 import (
+	"fmt"
 	"github.com/Cyinx/einx/slog"
 	"github.com/yuin/gopher-lua"
 )
@@ -24,7 +25,7 @@ func NewLuaStae() *LuaRuntime {
 		lua.LoadLibName:   lua.OpenPackage,
 		lua.BaseLibName:   lua.OpenBase,
 		lua.TabLibName:    lua.OpenTable,
-		lua.OsLibName:     OpenOs,
+		lua.OsLibName:     OpenOsRuntime,
 		lua.StringLibName: lua.OpenString,
 		lua.MathLibName:   lua.OpenMath,
 	}
@@ -38,7 +39,7 @@ func NewLuaStae() *LuaRuntime {
 	runtime := &LuaRuntime{
 		lua: vm,
 	}
-	return vm
+	return runtime
 }
 
 func (this *LuaRuntime) LoadFile(path string) {
@@ -133,12 +134,19 @@ func convertLuaValue(lv lua.LValue) interface{} {
 
 func (this *LuaRuntime) PCall(f string, args ...interface{}) {
 	l := this.lua
-	l.Push(L.GetGlobal(f))
+	l.Push(l.GetGlobal(f))
 	for _, arg := range args {
-		val := convertValue(arg)
-		ls.Push(val)
+		val := convertValue(l, arg)
+		l.Push(val)
 	}
-	if err := l.PCall(len(args), cp.NRet, cp.Handler); err != nil {
+	if err := l.PCall(len(args), -1, nil); err != nil {
+		slog.LogError("lua", "lua pcall err:%v", err)
+	}
+}
+
+func (this *LuaRuntime) DoFile(f string) {
+	l := this.lua
+	if err := l.DoFile(f); err != nil {
 		slog.LogError("lua", "lua pcall err:%v", err)
 	}
 }

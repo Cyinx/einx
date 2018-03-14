@@ -4,6 +4,7 @@ import (
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/component"
 	"github.com/Cyinx/einx/event"
+	"github.com/Cyinx/einx/lua"
 	"github.com/Cyinx/einx/module"
 	"github.com/Cyinx/einx/network"
 	"sync"
@@ -22,7 +23,7 @@ type RpcHandler = module.RpcHandler
 type ProtoTypeID = network.ProtoTypeID
 type Module = module.Module
 type SessionEventMsg = event.SessionEventMsg
-
+type LuaRuntime = lua_state.LuaRuntime
 type einx struct {
 	end_wait   sync.WaitGroup
 	close_chan chan bool

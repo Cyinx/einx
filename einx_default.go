@@ -19,8 +19,8 @@ func GetModule(name string) Module {
 	return module.GetModule(name)
 }
 
-func NewLuaStae() *lua.LuaRuntime {
-	return lua.NewLuaStae()
+func NewLuaStae() *lua_state.LuaRuntime {
+	return lua_state.NewLuaStae()
 }
 
 func AddTcpServer(m module.Module, addr string, mgr interface{}) {
