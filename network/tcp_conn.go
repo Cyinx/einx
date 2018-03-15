@@ -17,6 +17,7 @@ type TcpConn struct {
 	write_stop     chan struct{}
 	module         ModuleEventer
 	last_ping_tick int64
+	remote_addr    string
 }
 
 func NewTcpConn(raw_conn net.Conn, m ModuleEventer) Agent {
@@ -28,6 +29,7 @@ func NewTcpConn(raw_conn net.Conn, m ModuleEventer) Agent {
 		agent_id:       agent.GenAgentID(),
 		module:         m,
 		last_ping_tick: 0,
+		remote_addr:    raw_conn.RemoteAddr().(*net.TCPAddr).String(),
 	}
 	return tcp_agent
 }

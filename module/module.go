@@ -165,7 +165,8 @@ func (this *module) Run(wait *sync.WaitGroup) {
 		}
 	}
 run_close:
-	slog.LogError("perfomance", "total %s %d %d", this.name, time.Now().UnixNano()/1e6-now, this.op_count)
+	elasp_time := time.Now().UnixNano()/1e6 - now
+	slog.LogError("perfomance", "total %s %d %d %d", this.name, elasp_time, this.op_count, this.op_count/elasp_time)
 	this.do_close(wait)
 }
 

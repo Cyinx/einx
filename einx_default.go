@@ -23,9 +23,9 @@ func NewLuaStae() *lua_state.LuaRuntime {
 	return lua_state.NewLuaStae()
 }
 
-func AddTcpServer(m module.Module, addr string, mgr interface{}) {
+func AddTcpServerCom(m module.Module, addr string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
-	tcp_server := network.NewTcpServer(addr, m_eventer)
+	tcp_server := network.NewTcpServerCom(addr, m_eventer)
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_server
@@ -33,9 +33,9 @@ func AddTcpServer(m module.Module, addr string, mgr interface{}) {
 	m_eventer.PushEventMsg(e)
 }
 
-func StartTcpClient(m module.Module, addr string, mgr interface{}) {
+func StartTcpClientCom(m module.Module, name string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
-	tcp_client := network.NewTcpClient(addr, m_eventer)
+	tcp_client := network.NewTcpClientCom(name, m_eventer)
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_client
@@ -45,7 +45,6 @@ func StartTcpClient(m module.Module, addr string, mgr interface{}) {
 
 func Run() {
 	go console.Run()
-	_einx_default.start_run_modules()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill)
 	sig := <-c

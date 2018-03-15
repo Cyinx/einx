@@ -24,17 +24,15 @@ type ProtoTypeID = network.ProtoTypeID
 type Module = module.Module
 type SessionEventMsg = event.SessionEventMsg
 type LuaRuntime = lua_state.LuaRuntime
+type ITcpClientCom = network.ITcpClientCom
+type ITcpServerCom = network.ITcpServerCom
+
 type einx struct {
 	end_wait   sync.WaitGroup
 	close_chan chan bool
 }
 
-func (this *einx) start_run_modules() {
-	//module.StartRunModules(&this.end_wait)
-}
-
 func (this *einx) do_close() {
-	//shutdown server
 	module.Close()
 }
 

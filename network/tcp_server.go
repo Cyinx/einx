@@ -6,15 +6,15 @@ import (
 	"net"
 )
 
-type TcpServer struct {
+type TcpServerCom struct {
 	listener     net.Listener
 	component_id ComponentID
 	module       ModuleEventer
 	addr         string
 }
 
-func NewTcpServer(addr string, m ModuleEventer) Component {
-	tcp_server := &TcpServer{
+func NewTcpServerCom(addr string, m ModuleEventer) Component {
+	tcp_server := &TcpServerCom{
 		component_id: GenComponentID(),
 		addr:         addr,
 		module:       m,
@@ -22,15 +22,15 @@ func NewTcpServer(addr string, m ModuleEventer) Component {
 	return tcp_server
 }
 
-func (this *TcpServer) GetID() ComponentID {
+func (this *TcpServerCom) GetID() ComponentID {
 	return this.component_id
 }
 
-func (this *TcpServer) GetType() ComponentType {
+func (this *TcpServerCom) GetType() ComponentType {
 	return ServerType_TCP
 }
 
-func (this *TcpServer) Start() {
+func (this *TcpServerCom) Start() {
 
 	listener, err := net.Listen("tcp", this.addr)
 	if err != nil {
@@ -41,11 +41,11 @@ func (this *TcpServer) Start() {
 	go this.do_tcp_accept()
 }
 
-func (this *TcpServer) Close() {
+func (this *TcpServerCom) Close() {
 	this.listener.Close()
 }
 
-func (this *TcpServer) do_tcp_accept() {
+func (this *TcpServerCom) do_tcp_accept() {
 
 	for {
 		raw_conn, err := this.listener.Accept()

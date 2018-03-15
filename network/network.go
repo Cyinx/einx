@@ -27,11 +27,9 @@ const (
 	ClientType_UDP
 )
 
-type Server interface {
+type ITcpServerCom interface {
 	GetID() ComponentID
 	GetType() ComponentType
-	Start(addr string)
-	Close()
 }
 
 type Linker interface {
@@ -39,10 +37,10 @@ type Linker interface {
 	Pong()
 }
 
-type Client interface {
+type ITcpClientCom interface {
 	GetID() ComponentID
 	GetType() ComponentType
-	Start()
+	Connect(addr string)
 }
 
 type ConnType uint16
