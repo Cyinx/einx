@@ -37,11 +37,11 @@ func (this *TcpClientCom) Close() {
 
 }
 
-func (this *TcpClientCom) Connect(addr string) {
-	go this.connect(addr)
+func (this *TcpClientCom) Connect(addr string, user_type int16) {
+	go this.connect(addr, user_type)
 }
 
-func (this *TcpClientCom) connect(addr string) {
+func (this *TcpClientCom) connect(addr string, user_type int16) {
 	raw_conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		slog.LogWarning("tcp_client", "tcp connect failed %v", err)
@@ -49,7 +49,8 @@ func (this *TcpClientCom) connect(addr string) {
 		return
 	}
 
-	tcp_agent := NewTcpConn(raw_conn, this.module)
+	tcp_agent := NewTcpConn(raw_conn, this.module, AgentType_TCP_OutGoing)
+	tcp_agent.SetUserType(user_type)
 	this.module.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
 
 	go func() {

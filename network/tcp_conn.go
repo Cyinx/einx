@@ -18,9 +18,11 @@ type TcpConn struct {
 	module         ModuleEventer
 	last_ping_tick int64
 	remote_addr    string
+	agent_type     int16
+	user_type      int16
 }
 
-func NewTcpConn(raw_conn net.Conn, m ModuleEventer) Agent {
+func NewTcpConn(raw_conn net.Conn, m ModuleEventer, agent_type int16) Agent {
 	tcp_agent := &TcpConn{
 		conn:           raw_conn,
 		close_flag:     0,
@@ -30,12 +32,26 @@ func NewTcpConn(raw_conn net.Conn, m ModuleEventer) Agent {
 		module:         m,
 		last_ping_tick: 0,
 		remote_addr:    raw_conn.RemoteAddr().(*net.TCPAddr).String(),
+		agent_type:     agent_type,
+		user_type:      0,
 	}
 	return tcp_agent
 }
 
 func (this *TcpConn) GetID() AgentID {
 	return this.agent_id
+}
+
+func (this *TcpConn) GetType() int16 {
+	return this.agent_type
+}
+
+func (this *TcpConn) GetUserType() int16 {
+	return this.user_type
+}
+
+func (this *TcpConn) SetUserType(t int16) {
+	this.user_type = t
 }
 
 func (this *TcpConn) ReadMsg() ([]byte, error) {
@@ -77,8 +93,8 @@ func (this *TcpConn) LocalAddr() net.Addr {
 	return nil
 }
 
-func (this *TcpConn) RemoteAddr() net.Addr {
-	return nil
+func (this *TcpConn) RemoteAddr() string {
+	return this.remote_addr
 }
 
 func (this *TcpConn) Close() {

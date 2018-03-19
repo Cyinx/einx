@@ -54,7 +54,7 @@ func (this *TcpServerCom) do_tcp_accept() {
 			return
 		}
 
-		tcp_agent := NewTcpConn(raw_conn, this.module)
+		tcp_agent := NewTcpConn(raw_conn, this.module, AgentType_TCP_InComming)
 		this.module.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
 		go func() {
 			AddPong(tcp_agent.(*TcpConn))

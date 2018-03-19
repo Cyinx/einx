@@ -32,6 +32,15 @@ type ITcpServerCom interface {
 	GetType() ComponentType
 }
 
+const (
+	AgentType_TCP_InComming = iota
+	AgentType_TCP_OutGoing
+)
+
+type Connection interface {
+	RemoteAddr() string
+}
+
 type Linker interface {
 	Ping()
 	Pong()
@@ -40,7 +49,7 @@ type Linker interface {
 type ITcpClientCom interface {
 	GetID() ComponentID
 	GetType() ComponentType
-	Connect(addr string)
+	Connect(addr string, user_type int16)
 }
 
 type ConnType uint16

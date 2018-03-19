@@ -13,8 +13,16 @@ type Agent interface {
 	WriteMsg(msg_id ProtoTypeID, msg interface{}) bool
 	Close()
 	Run()
+	GetType() int16
+	GetUserType() int16
+	SetUserType(int16)
 	Destroy()
 }
+
+const (
+	AgentType_TCP_InComming = iota
+	AgentType_TCP_OutGoing
+)
 
 type AgentSessionMgr interface {
 	OnAgentEnter(AgentID, Agent)
