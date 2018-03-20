@@ -33,8 +33,8 @@ type ITcpServerCom interface {
 }
 
 const (
-	AgentType_TCP_InComming = iota
-	AgentType_TCP_OutGoing
+	AgentType_TCP_InComming = agent.AgentType_TCP_InComming
+	AgentType_TCP_OutGoing  = agent.AgentType_TCP_OutGoing
 )
 
 type Connection interface {

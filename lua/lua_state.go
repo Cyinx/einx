@@ -150,3 +150,36 @@ func (this *LuaRuntime) DoFile(f string) {
 		slog.LogError("lua", "lua pcall err:%v", err)
 	}
 }
+
+func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
+	var buffer []byte = nil
+	switch v := lv.(type) {
+	case *lua.LNilType:
+		buffer = append(b, '0')
+	case lua.LBool:
+		buffer = append(b, 'b', byte(v))
+	case lua.LString:
+		buffer = append(b, 's', string(v))
+	case lua.LNumber:
+		buffer = append(b, 'n', float64(v))
+	case *lua.LTable:
+		maxn := v.MaxN()
+		if maxn == 0 { // table
+			buffer = append(b, 't')
+			v.ForEach(func(key, value lua.LValue) {
+				keystr := fmt.Sprint(convertLuaValue(key))
+				ret[keystr] = convertLuaValue(value)
+			})
+			return ret
+		} else { // array
+			ret := make([]interface{}, 0, maxn)
+			for i := 1; i <= maxn; i++ {
+				ret = append(ret, convertLuaValue(v.RawGetInt(i)))
+			}
+			return ret
+		}
+	default:
+		break
+	}
+	return buffer
+}
