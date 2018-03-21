@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Cyinx/einx/slog"
 	"github.com/yuin/gopher-lua"
+	"math"
 )
 
 type LuaRuntime struct {
@@ -155,31 +156,58 @@ func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
 	var buffer []byte = nil
 	switch v := lv.(type) {
 	case *lua.LNilType:
-		buffer = append(b, '0')
+		buffer = append(b, 'z')
 	case lua.LBool:
-		buffer = append(b, 'b', byte(v))
-	case lua.LString:
-		buffer = append(b, 's', string(v))
-	case lua.LNumber:
-		buffer = append(b, 'n', float64(v))
-	case *lua.LTable:
-		maxn := v.MaxN()
-		if maxn == 0 { // table
+		if v == true {
 			buffer = append(b, 't')
-			v.ForEach(func(key, value lua.LValue) {
-				keystr := fmt.Sprint(convertLuaValue(key))
-				ret[keystr] = convertLuaValue(value)
-			})
-			return ret
-		} else { // array
-			ret := make([]interface{}, 0, maxn)
-			for i := 1; i <= maxn; i++ {
-				ret = append(ret, convertLuaValue(v.RawGetInt(i)))
-			}
-			return ret
+		} else {
+			buffer = append(b, 'f')
 		}
+	case lua.LString:
+		slen := uint32(len(v))
+		buffer = append(buffer, 's', byte(slen), byte(slen>>8), byte(slen>>16), byte(slen>>24))
+		buffer = append(buffer, v...)
+	case lua.LNumber:
+		n := math.Float64bits(v)
+		buffer = append(b, 'n', byte(n), byte(n>>8), byte(n>>16), byte(n>>24), byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
+	case *lua.LTable:
+		buffer = append(b, 't')
+		v.ForEach(func(key, value lua.LValue) {
+			buffer = append(buffer, 'k')
+			Marshal(buffer, key)
+			buffer = append(buffer, 'v')
+			Marshal(buffer, value)
+		})
 	default:
 		break
 	}
 	return buffer
+}
+
+func (this *LuaRuntime) UnMarshal(b []byte) lua.LValue {
+	t := b[0]
+	switch t {
+	case 'z':
+		return lua.LNil
+	case 't':
+		return lua.LBool(true)
+	case 'f':
+		return lua.LBool(false)
+	case 's':
+		if len(b) < 5 {
+			slog.LogWarning("lua", "error:unknow unmarshal string")
+			return lua.LNil
+		}
+		slen := uint32(b[1]) | uint32(b[2])<<8 | uint32(b[3])<<16 | uint32(b[4])<<24
+		return lua.LString(b[5:])
+	case 'n':
+		if len(b) < 9 {
+			slog.LogWarning("lua", "error:unknow unmarshal number")
+			return lua.LNil
+		}
+		n := uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16 | uint64(b[4])<<24 |
+			uint64(b[5])<<32 | uint64(b[6])<<40 | uint64(b[7])<<48 | uint64(b[8])<<56
+		return lua.LNumber(math.Float64frombits(n))
+	case 't':
+	}
 }
