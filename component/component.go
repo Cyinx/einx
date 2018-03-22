@@ -23,5 +23,12 @@ func GenComponentID() ComponentID {
 
 type ComponentMgr interface {
 	OnComponentCreate(ComponentID, Component)
-	OnComponentError(EventType, error)
+	OnComponentError(Component, error)
 }
+
+const (
+	COMPONENT_TYPE_BEGIN = iota
+	COMPONENT_TYPE_TCP_SERVER
+	COMPONENT_TYPE_TCP_CLIENT
+	COMPONENT_TYPE_DB_MONGODB
+)

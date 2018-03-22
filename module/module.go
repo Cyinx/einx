@@ -186,6 +186,8 @@ func (this *module) handle_event(event_msg EventMsg) {
 		this.handle_data_event(event_msg)
 	case event.EVENT_COMPONENT_CREATE:
 		this.handle_component_event(event_msg)
+	case event.EVENT_COMPONENT_ERROR:
+		this.handle_component_error(event_msg)
 	case event.EVENT_TCP_ACCEPTED:
 		this.handle_agent_enter(event_msg)
 	case event.EVENT_TCP_CONNECTED:
@@ -221,6 +223,17 @@ func (this *module) handle_component_event(event_msg EventMsg) {
 	this.commgr_map[c.GetID()] = com_event.Attach
 	mgr := com_event.Attach.(ComponentMgr)
 	mgr.OnComponentCreate(c.GetID(), c)
+}
+
+func (this *module) handle_component_error(event_msg EventMsg) {
+	com_event := event_msg.(*ComponentEventMsg)
+	c := com_event.Sender
+	if i_mgr, ok := this.commgr_map[c.GetID()]; ok == true {
+		mgr := i_mgr.(ComponentMgr)
+		mgr.OnComponentError(c, com_event.Attach.(error))
+		return
+	}
+	slog.LogError("component", "module[%v] not register component[%v] manager cant handle error:%v", this.name, c.GetID(), com_event.Attach)
 }
 
 func (this *module) handle_agent_enter(event_msg EventMsg) {

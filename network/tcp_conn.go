@@ -191,7 +191,7 @@ func (this *TcpConn) Ping() {
 }
 
 func (this *TcpConn) Pong() {
-	if NowKeepAliveTick-this.last_ping_tick > 20 {
-
+	if NowKeepAliveTick-this.last_ping_tick >= PONGTIME {
+		this.conn.Close()
 	}
 }

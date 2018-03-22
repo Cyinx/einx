@@ -24,8 +24,8 @@ type ProtoTypeID = network.ProtoTypeID
 type Module = module.Module
 type SessionEventMsg = event.SessionEventMsg
 type LuaRuntime = lua_state.LuaRuntime
-type ITcpClientCom = network.ITcpClientCom
-type ITcpServerCom = network.ITcpServerCom
+type ITcpClientMgr = network.ITcpClientMgr
+type ITcpServerMgr = network.ITcpServerMgr
 
 type einx struct {
 	end_wait   sync.WaitGroup

@@ -6,14 +6,14 @@ import (
 	"net"
 )
 
-type TcpClientCom struct {
+type TcpClientMgr struct {
 	name         string
 	component_id ComponentID
 	module       ModuleEventer
 }
 
-func NewTcpClientCom(name string, m ModuleEventer) Component {
-	tcp_client := &TcpClientCom{
+func NewTcpClientMgr(name string, m ModuleEventer) Component {
+	tcp_client := &TcpClientMgr{
 		name:         name,
 		module:       m,
 		component_id: GenComponentID(),
@@ -21,27 +21,27 @@ func NewTcpClientCom(name string, m ModuleEventer) Component {
 	return tcp_client
 }
 
-func (this *TcpClientCom) GetID() ComponentID {
+func (this *TcpClientMgr) GetID() ComponentID {
 	return this.component_id
 }
 
-func (this *TcpClientCom) GetType() ComponentType {
-	return ClientType_TCP
+func (this *TcpClientMgr) GetType() ComponentType {
+	return COMPONENT_TYPE_TCP_CLIENT
 }
 
-func (this *TcpClientCom) Start() {
-
-}
-
-func (this *TcpClientCom) Close() {
+func (this *TcpClientMgr) Start() {
 
 }
 
-func (this *TcpClientCom) Connect(addr string, user_type int16) {
+func (this *TcpClientMgr) Close() {
+
+}
+
+func (this *TcpClientMgr) Connect(addr string, user_type int16) {
 	go this.connect(addr, user_type)
 }
 
-func (this *TcpClientCom) connect(addr string, user_type int16) {
+func (this *TcpClientMgr) connect(addr string, user_type int16) {
 	raw_conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		slog.LogWarning("tcp_client", "tcp connect failed %v", err)

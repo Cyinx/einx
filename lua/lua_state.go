@@ -69,6 +69,8 @@ func convertValue(l *lua.LState, val interface{}) lua.LValue {
 		return lua.LNil
 	}
 	switch v := val.(type) {
+	case lua.LValue:
+		return v
 	case bool:
 		return lua.LBool(v)
 	case string:
@@ -152,6 +154,11 @@ func (this *LuaRuntime) DoFile(f string) {
 	}
 }
 
+func (this *LuaRuntime) RegisterFunction(s string, f func(*lua.LState) int) {
+	l := this.lua
+	l.SetGlobal(s, l.NewFunction(f))
+}
+
 func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
 	var buffer []byte = nil
 	switch v := lv.(type) {
@@ -168,46 +175,56 @@ func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
 		buffer = append(buffer, 's', byte(slen), byte(slen>>8), byte(slen>>16), byte(slen>>24))
 		buffer = append(buffer, v...)
 	case lua.LNumber:
-		n := math.Float64bits(v)
+		n := math.Float64bits(float64(v))
 		buffer = append(b, 'n', byte(n), byte(n>>8), byte(n>>16), byte(n>>24), byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
 	case *lua.LTable:
-		buffer = append(b, 't')
+		buffer = append(b, '[')
 		v.ForEach(func(key, value lua.LValue) {
-			buffer = append(buffer, 'k')
-			Marshal(buffer, key)
-			buffer = append(buffer, 'v')
-			Marshal(buffer, value)
+			buffer = this.Marshal(buffer, key)
+			buffer = this.Marshal(buffer, value)
 		})
+		buffer = append(buffer, ']')
 	default:
 		break
 	}
 	return buffer
 }
 
-func (this *LuaRuntime) UnMarshal(b []byte) lua.LValue {
+func (this *LuaRuntime) UnMarshal(b []byte) (lua.LValue, []byte) {
 	t := b[0]
 	switch t {
 	case 'z':
-		return lua.LNil
+		return lua.LNil, b[1:]
 	case 't':
-		return lua.LBool(true)
+		return lua.LBool(true), b[1:]
 	case 'f':
-		return lua.LBool(false)
+		return lua.LBool(false), b[1:]
 	case 's':
 		if len(b) < 5 {
 			slog.LogWarning("lua", "error:unknow unmarshal string")
-			return lua.LNil
+			return lua.LNil, b
 		}
 		slen := uint32(b[1]) | uint32(b[2])<<8 | uint32(b[3])<<16 | uint32(b[4])<<24
-		return lua.LString(b[5:])
+		return lua.LString(b[5:]), b[5+slen:]
 	case 'n':
 		if len(b) < 9 {
 			slog.LogWarning("lua", "error:unknow unmarshal number")
-			return lua.LNil
+			return lua.LNil, b
 		}
 		n := uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16 | uint64(b[4])<<24 |
 			uint64(b[5])<<32 | uint64(b[6])<<40 | uint64(b[7])<<48 | uint64(b[8])<<56
-		return lua.LNumber(math.Float64frombits(n))
-	case 't':
+		return lua.LNumber(math.Float64frombits(n)), b[9:]
+	case '[':
+		var key lua.LValue
+		var val lua.LValue
+		tb := b[1:]
+		lt := this.lua.NewTable()
+		for tb[0] != ']' {
+			key, tb = this.UnMarshal(tb)
+			val, tb = this.UnMarshal(tb)
+			lt.RawSet(key, val)
+		}
+		return lt, tb[1:]
 	}
+	return lua.LNil, b
 }

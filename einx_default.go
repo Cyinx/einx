@@ -23,9 +23,9 @@ func NewLuaStae() *lua_state.LuaRuntime {
 	return lua_state.NewLuaStae()
 }
 
-func AddTcpServerCom(m module.Module, addr string, mgr interface{}) {
+func AddTcpServerMgr(m module.Module, addr string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
-	tcp_server := network.NewTcpServerCom(addr, m_eventer)
+	tcp_server := network.NewTcpServerMgr(addr, m_eventer)
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_server
@@ -33,12 +33,21 @@ func AddTcpServerCom(m module.Module, addr string, mgr interface{}) {
 	m_eventer.PushEventMsg(e)
 }
 
-func StartTcpClientCom(m module.Module, name string, mgr interface{}) {
+func StartTcpClientMgr(m module.Module, name string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
-	tcp_client := network.NewTcpClientCom(name, m_eventer)
+	tcp_client := network.NewTcpClientMgr(name, m_eventer)
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_client
+	e.Attach = mgr
+	m_eventer.PushEventMsg(e)
+}
+
+func AddModuleComponent(m module.Module, c Component, mgr interface{}) {
+	m_eventer := m.(module.ModuleEventer)
+	e := &event.ComponentEventMsg{}
+	e.MsgType = event.EVENT_COMPONENT_CREATE
+	e.Sender = c
 	e.Attach = mgr
 	m_eventer.PushEventMsg(e)
 }

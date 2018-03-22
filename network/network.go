@@ -20,14 +20,7 @@ func GenComponentID() ComponentID {
 	return component.GenComponentID()
 }
 
-const (
-	ServerType_TCP = iota
-	ServerType_UDP
-	ClientType_TCP
-	ClientType_UDP
-)
-
-type ITcpServerCom interface {
+type ITcpServerMgr interface {
 	GetID() ComponentID
 	GetType() ComponentType
 }
@@ -46,7 +39,7 @@ type Linker interface {
 	Pong()
 }
 
-type ITcpClientCom interface {
+type ITcpClientMgr interface {
 	GetID() ComponentID
 	GetType() ComponentType
 	Connect(addr string, user_type int16)
@@ -64,3 +57,8 @@ type WriteWrapper struct {
 	msg_id   ProtoTypeID
 	buffer   []byte
 }
+
+const (
+	COMPONENT_TYPE_TCP_SERVER = component.COMPONENT_TYPE_TCP_SERVER
+	COMPONENT_TYPE_TCP_CLIENT = component.COMPONENT_TYPE_TCP_CLIENT
+)
