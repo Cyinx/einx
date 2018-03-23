@@ -1,9 +1,8 @@
 package mongodb
 
 import (
-	"errors"
-	"fmt"
 	"github.com/Cyinx/einx/component"
+	"github.com/Cyinx/einx/event"
 	"github.com/Cyinx/einx/module"
 	"github.com/Cyinx/einx/slog"
 	"gopkg.in/mgo.v2"
@@ -23,25 +22,25 @@ type MongoDBMgr struct {
 	session      *mgo.Session
 	timeout      time.Duration
 	dbcfg        *MongoDBInfo
-	component_id ComponentID
-	module       ModuleEventer
+	component_id component.ComponentID
+	m            ModuleEventer
 }
 
-func NewMongoDBMgr(m ModuleEventer, dbcfg *MongoDBInfo, timeout time.Duration) *MongoDBMgr {
+func NewMongoDBMgr(m module.Module, dbcfg *MongoDBInfo, timeout time.Duration) *MongoDBMgr {
 	return &MongoDBMgr{
 		session:      nil,
 		timeout:      timeout,
 		dbcfg:        dbcfg,
 		component_id: component.GenComponentID(),
-		module:       m,
+		m:            m.(module.ModuleEventer),
 	}
 }
 
-func (this *MongoDBMgr) GetID() ComponentID {
+func (this *MongoDBMgr) GetID() component.ComponentID {
 	return this.component_id
 }
 
-func (this *MongoDBMgr) GetType() ComponentType {
+func (this *MongoDBMgr) GetType() component.ComponentType {
 	return component.COMPONENT_TYPE_DB_MONGODB
 }
 
@@ -49,12 +48,16 @@ func (this *MongoDBMgr) Start() {
 	var err error
 	this.session, err = mgo.DialWithTimeout(this.dbcfg.String(), this.timeout)
 	if err != nil {
-		panic(err.Error())
+		e := &event.ComponentEventMsg{}
+		e.MsgType = event.EVENT_COMPONENT_ERROR
+		e.Sender = this
+		e.Attach = err
+		this.m.PushEventMsg(e)
 		return
 	}
 
 	this.session.SetMode(mgo.Monotonic, true)
-	slog.LogInfo("mongodb", "MongoDB Connect %v mongodb...success", this.dbcfg.String())
+	slog.LogInfo("mongodb", "MongoDB Connect success")
 }
 
 func (this *MongoDBMgr) Close() {
@@ -64,6 +67,13 @@ func (this *MongoDBMgr) Close() {
 		this.session = nil
 		slog.LogInfo("mongodb", "Disconnect mongodb url: ", this.dbcfg.String())
 	}
+}
+
+func (this *MongoDBMgr) Ping() error {
+	if this.session != nil {
+		return this.session.Ping()
+	}
+	return MONGODB_SESSION_NIL_ERR
 }
 
 func (this *MongoDBMgr) RefreshSession() {

@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-const MAIN_MODULE string = "Main"
 const RPC_CHAN_LENGTH = 512
 
 type Agent = agent.Agent
@@ -264,7 +263,7 @@ func (this *module) handle_rpc(event_msg EventMsg) {
 	if handler, ok := this.rpc_handler_map[rpc_msg.RpcName]; ok == true {
 		handler(rpc_msg.Sender, rpc_msg.Data)
 	} else {
-		slog.LogError("module", "module unregister rpc handler!")
+		slog.LogError("module", "module [%v] unregister rpc handler! rpc name:[%v]", this.name, rpc_msg.RpcName)
 	}
 	event_msg.Reset()
 	this.rpc_msg_pool.Put(rpc_msg)

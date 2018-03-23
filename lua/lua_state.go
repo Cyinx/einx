@@ -11,9 +11,9 @@ type LuaRuntime struct {
 	lua *lua.LState
 }
 
-type LuaTable struct {
+func (this *LuaRuntime) GetVm() *lua.LState {
+	return this.lua
 }
-
 func NewLuaStae() *LuaRuntime {
 	vm := lua.NewState(lua.Options{
 		CallStackSize:       4096,
@@ -147,6 +147,17 @@ func (this *LuaRuntime) PCall(f string, args ...interface{}) {
 	}
 }
 
+func (this *LuaRuntime) PCall2(f string, args ...lua.LValue) {
+	l := this.lua
+	l.Push(l.GetGlobal(f))
+	for _, arg := range args {
+		l.Push(arg)
+	}
+	if err := l.PCall(len(args), -1, nil); err != nil {
+		slog.LogError("lua", "lua pcall2 err:%v", err)
+	}
+}
+
 func (this *LuaRuntime) DoFile(f string) {
 	l := this.lua
 	if err := l.DoFile(f); err != nil {
@@ -172,7 +183,7 @@ func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
 		}
 	case lua.LString:
 		slen := uint32(len(v))
-		buffer = append(buffer, 's', byte(slen), byte(slen>>8), byte(slen>>16), byte(slen>>24))
+		buffer = append(b, 's', byte(slen), byte(slen>>8), byte(slen>>16), byte(slen>>24))
 		buffer = append(buffer, v...)
 	case lua.LNumber:
 		n := math.Float64bits(float64(v))
@@ -180,8 +191,7 @@ func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
 	case *lua.LTable:
 		buffer = append(b, '[')
 		v.ForEach(func(key, value lua.LValue) {
-			buffer = this.Marshal(buffer, key)
-			buffer = this.Marshal(buffer, value)
+			buffer = this.Marshal(this.Marshal(buffer, key), value)
 		})
 		buffer = append(buffer, ']')
 	default:
