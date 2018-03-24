@@ -1,0 +1,3 @@
+[submodule "vendor/github.com/yuin/gopher-lua"]
+	path = vendor/github.com/yuin/gopher-lua
+	url = https://github.com/yuin/gopher-lua
