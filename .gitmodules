@@ -1,6 +1,3 @@
-[submodule "vendor/github/Cyinx/protobuf"]
-	path = vendor/github/Cyinx/protobuf
-	url = git://github.com/Cyinx/protobuf
 [submodule "vendor/github/yuin/gopher-lua"]
 	path = vendor/github/yuin/gopher-lua
 	url = https://github.com/yuin/gopher-lua
