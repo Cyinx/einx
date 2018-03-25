@@ -1,6 +1,7 @@
 package lua_state
 
 import (
+	"github.com/Cyinx/einx/slog"
 	"github.com/yuin/gopher-lua"
 	"strings"
 	"time"
@@ -102,5 +103,15 @@ func osTime(L *lua.LState) int {
 		}
 		L.Push(lua.LNumber(t.UTC().Unix()))
 	}
+	return 1
+}
+
+func luaPrint(L *lua.LState) int {
+	if L.GetTop() < 1 {
+		return 0
+	}
+
+	s := L.CheckString(1)
+	slog.LogInfo("lua_print", s)
 	return 1
 }

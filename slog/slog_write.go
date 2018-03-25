@@ -17,6 +17,7 @@ type LogWriter struct {
 	buf      []byte
 	filter   map[string]*FileWriter
 	end_wait sync.WaitGroup
+	path     string
 }
 
 func (this *LogWriter) LogWrite(rec *LogRecord) {
@@ -28,6 +29,7 @@ var _log_writer = &LogWriter{
 	rot:    make(chan bool),
 	filter: make(map[string]*FileWriter),
 	buf:    make([]byte, 2048),
+	path:   "",
 }
 
 func WriteRecover(log *LogRecord) {
@@ -41,7 +43,7 @@ func (this *LogWriter) writeFile(log *LogRecord) {
 
 	file_writer, ok := _log_writer.filter[log.Name]
 	if ok == false {
-		fd, err := os.OpenFile(log.Name+".log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+		fd, err := os.OpenFile(this.path+log.Name+".log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 		if err == nil {
 			file_writer = &FileWriter{log.Name, fd}
 		}
@@ -53,6 +55,23 @@ func (this *LogWriter) writeFile(log *LogRecord) {
 
 func (this *LogWriter) writeStd(log *LogRecord) {
 	os.Stdout.Write(_log_writer.buf)
+}
+
+func (this *LogWriter) SetPath(path string) {
+	this.path = path
+	fi, err := os.Stat(path)
+	is_exist := false
+	if err != nil {
+		is_exist = os.IsExist(err)
+	} else {
+		is_exist = fi.IsDir()
+	}
+	if is_exist == false {
+		os.MkdirAll(this.path, 0x777)
+		if this.path[len(this.path)-1] != '/' && this.path[len(this.path)-1] != '\\' {
+			this.path = this.path + "/"
+		}
+	}
 }
 
 func InitLogWriter() {

@@ -37,15 +37,17 @@ func NewLuaStae() *LuaRuntime {
 		vm.Call(1, 0)
 	}
 
+	vm.SetGlobal("print", vm.NewFunction(luaPrint))
+
 	runtime := &LuaRuntime{
 		lua: vm,
 	}
 	return runtime
 }
 
-func (this *LuaRuntime) LoadFile(path string) {
+func (this *LuaRuntime) DoFile(path string) {
 	if err := this.lua.DoFile(path); err != nil {
-		slog.LogError("lua", "lua load file err:%v", err)
+		slog.LogError("lua", "lua dofile error:%v", err)
 	}
 }
 
@@ -155,13 +157,6 @@ func (this *LuaRuntime) PCall2(f string, args ...lua.LValue) {
 	}
 	if err := l.PCall(len(args), -1, nil); err != nil {
 		slog.LogError("lua", "lua pcall2 err:%v", err)
-	}
-}
-
-func (this *LuaRuntime) DoFile(f string) {
-	l := this.lua
-	if err := l.DoFile(f); err != nil {
-		slog.LogError("lua", "lua pcall err:%v", err)
 	}
 }
 

@@ -92,6 +92,10 @@ func LogError(name string, format string, args ...interface{}) {
 	_log_manager_default.post_log(ERROR, true, name, format, args...)
 }
 
+func SetLogPath(path string) {
+	_log_writer.SetPath(path)
+}
+
 func Close() {
 	_log_writer.LogWrite(nil)
 	_log_writer.end_wait.Wait()
