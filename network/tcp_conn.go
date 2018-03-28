@@ -30,7 +30,7 @@ func NewTcpConn(raw_conn net.Conn, m ModuleEventer, agent_type int16) Agent {
 		write_stop:     make(chan struct{}),
 		agent_id:       agent.GenAgentID(),
 		module:         m,
-		last_ping_tick: 0,
+		last_ping_tick: NowKeepAliveTick,
 		remote_addr:    raw_conn.RemoteAddr().(*net.TCPAddr).String(),
 		agent_type:     agent_type,
 		user_type:      0,
