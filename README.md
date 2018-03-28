@@ -1,11 +1,14 @@
 einx
 ------
 a framework in golang for game server or app server.
+
 a example server for einx (https://github.com/Cyinx/game_server_einx)
+
 ----------------------------------------------------
 einx 是一个由 golang 编写的用于游戏服务器或者应用服务器的开源手脚架。
 
 设计目的:
+
 采用较为传统的以业务划分并发模块的方式降低逻辑开发难度，在逻辑开发与执行效率间取得平衡
 
 设计核心：
