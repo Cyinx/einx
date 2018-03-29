@@ -109,21 +109,6 @@ func (this *MongoDBMgr) Insert(collection string, doc interface{}) error {
 	return c.Insert(doc)
 }
 
-func (this *MongoDBMgr) StrongInsert(collection string, doc interface{}) error {
-	if this.session == nil {
-		return MONGODB_SESSION_NIL_ERR
-	}
-
-	db_session := this.session.Copy()
-	defer db_session.Close()
-
-	db_session.SetMode(mgo.Strong, true)
-
-	c := db_session.DB("").C(collection)
-
-	return c.Insert(doc)
-}
-
 func (this *MongoDBMgr) Update(collection string, cond interface{}, change interface{}) error {
 	if this.session == nil {
 		return MONGODB_SESSION_NIL_ERR
@@ -132,20 +117,6 @@ func (this *MongoDBMgr) Update(collection string, cond interface{}, change inter
 	db_session := this.session.Copy()
 	defer db_session.Close()
 
-	c := db_session.DB("").C(collection)
-
-	return c.Update(cond, bson.M{"$set": change})
-}
-
-func (this *MongoDBMgr) StrongUpdate(collection string, cond interface{}, change interface{}) error {
-	if this.session == nil {
-		return MONGODB_SESSION_NIL_ERR
-	}
-
-	db_session := this.session.Copy()
-	defer db_session.Close()
-
-	db_session.SetMode(mgo.Strong, true)
 	c := db_session.DB("").C(collection)
 
 	return c.Update(cond, bson.M{"$set": change})
@@ -223,63 +194,7 @@ func (this *MongoDBMgr) RemoveAll(collection string, cond interface{}) error {
 	return nil
 }
 
-func (this *MongoDBMgr) DBQueryOne(collection string, cond interface{}, resHandler func(bson.M) error) error {
-	if this.session == nil {
-		return MONGODB_SESSION_NIL_ERR
-	}
-
-	db_session := this.session.Copy()
-	defer db_session.Close()
-
-	c := db_session.DB("").C(collection)
-	q := c.Find(cond)
-
-	m := make(bson.M)
-	if err := q.One(m); err != nil {
-		if mgo.ErrNotFound != err {
-			slog.LogInfo("mongodb", "DBFindOne query falied,return error: %v; name: %v.", err, collection)
-		}
-		return err
-	}
-
-	if nil != resHandler {
-		return resHandler(m)
-	}
-
-	return nil
-
-}
-
-func (this *MongoDBMgr) StrongDBQueryOne(collection string, cond interface{}, resHandler func(bson.M) error) error {
-	if this.session == nil {
-		return MONGODB_SESSION_NIL_ERR
-	}
-
-	db_session := this.session.Copy()
-	defer db_session.Close()
-
-	db_session.SetMode(mgo.Strong, true)
-
-	c := db_session.DB("").C(collection)
-	q := c.Find(cond)
-
-	m := make(bson.M)
-	if err := q.One(m); err != nil {
-		if mgo.ErrNotFound != err {
-			slog.LogInfo("mongodb", "DBFindOne query falied, return error: %v; name: %v.", err, collection)
-		}
-		return err
-	}
-
-	if nil != resHandler {
-		return resHandler(m)
-	}
-
-	return nil
-
-}
-
-func (this *MongoDBMgr) DBQueryAll(collection string, cond interface{}, resHandler func(bson.M) error) error {
+func (this *MongoDBMgr) DBQuery(collection string, cond interface{}, result *[]bson.M) error {
 	if this.session == nil {
 		return MONGODB_SESSION_NIL_ERR
 	}
@@ -294,79 +209,6 @@ func (this *MongoDBMgr) DBQueryAll(collection string, cond interface{}, resHandl
 		return MONGODB_DBFINDALL_ERR
 	}
 
-	iter := q.Iter()
-	m := make(bson.M)
-	for iter.Next(m) == true {
-		if nil != resHandler {
-			err := resHandler(m)
-			if err != nil {
-				slog.LogInfo("mongodb", "resHandler error :%v!!!", err)
-				return err
-			}
-		}
-	}
-
+	q.All(result)
 	return nil
-
-}
-
-func (this *MongoDBMgr) StrongDBQueryAll(collection string, cond interface{}, resHandler func(bson.M) error) error {
-	if this.session == nil {
-		return MONGODB_SESSION_NIL_ERR
-	}
-
-	db_session := this.session.Copy()
-	defer db_session.Close()
-
-	db_session.SetMode(mgo.Strong, true)
-
-	c := db_session.DB("").C(collection)
-	q := c.Find(cond)
-
-	slog.LogInfo("mongodb", "[MongoDBMgr.DBFindAll] name:%s,query:%v", collection, cond)
-
-	if nil == q {
-		return MONGODB_DBFINDALL_ERR
-	}
-	iter := q.Iter()
-	m := make(bson.M)
-	for iter.Next(m) == true {
-		if resHandler != nil {
-			err := resHandler(m)
-			if err != nil {
-				slog.LogInfo("mongodb", "resHandler error :%v!!!", err)
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (this *MongoDBMgr) DeleteOne(collection string, cond interface{}) error {
-	if this.session == nil {
-		return MONGODB_SESSION_NIL_ERR
-	}
-
-	db_session := this.session.Copy()
-	defer db_session.Close()
-	db_session.SetMode(mgo.Strong, true)
-	c := db_session.DB("").C(collection)
-	return c.Remove(cond)
-}
-
-func (this *MongoDBMgr) DeleteAll(collection string, cond interface{}) (int, error) {
-	if this.session == nil {
-		return 0, MONGODB_SESSION_NIL_ERR
-	}
-
-	db_session := this.session.Copy()
-	defer db_session.Close()
-	db_session.SetMode(mgo.Strong, true)
-	c := db_session.DB("").C(collection)
-	changeInfo, err := c.RemoveAll(cond)
-	if err != nil {
-		return 0, err
-	}
-	return changeInfo.Removed, nil
 }
