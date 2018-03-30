@@ -194,7 +194,7 @@ func (this *MongoDBMgr) RemoveAll(collection string, cond interface{}) error {
 	return nil
 }
 
-func (this *MongoDBMgr) DBQuery(collection string, cond interface{}, result *[]bson.M) error {
+func (this *MongoDBMgr) DBQuery(collection string, cond interface{}, result *[]map[string]interface{}) error {
 	if this.session == nil {
 		return MONGODB_SESSION_NIL_ERR
 	}
@@ -210,5 +210,24 @@ func (this *MongoDBMgr) DBQuery(collection string, cond interface{}, result *[]b
 	}
 
 	q.All(result)
+	return nil
+}
+
+func (this *MongoDBMgr) DBQueryOneResult(collection string, cond interface{}, result map[string]interface{}) error {
+	if this.session == nil {
+		return MONGODB_SESSION_NIL_ERR
+	}
+
+	db_session := this.session.Copy()
+	defer db_session.Close()
+
+	c := db_session.DB("").C(collection)
+	q := c.Find(cond)
+
+	if nil == q {
+		return MONGODB_DBFINDALL_ERR
+	}
+
+	q.One(result)
 	return nil
 }
