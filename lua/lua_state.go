@@ -115,7 +115,12 @@ func convertLuaValue(lv lua.LValue) interface{} {
 	case lua.LString:
 		return string(v)
 	case lua.LNumber:
-		return float64(v)
+		f64i := float64(v)
+		I64i := int64(v)
+		if f64i == float64(I64i) {
+			return I64i
+		}
+		return f64i
 	case *lua.LTable:
 		maxn := v.MaxN()
 		if maxn == 0 { // table
