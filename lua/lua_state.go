@@ -210,7 +210,7 @@ func (this *LuaRuntime) UnMarshal(b []byte) (lua.LValue, []byte) {
 			return lua.LNil, b
 		}
 		slen := uint32(b[1]) | uint32(b[2])<<8 | uint32(b[3])<<16 | uint32(b[4])<<24
-		return lua.LString(b[5:]), b[5+slen:]
+		return lua.LString(b[5 : 5+slen]), b[5+slen:]
 	case 'n':
 		if len(b) < 9 {
 			slog.LogWarning("lua", "error:unknow unmarshal number")
