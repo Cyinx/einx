@@ -38,6 +38,8 @@ func NewLuaStae() *LuaRuntime {
 	}
 
 	vm.SetGlobal("print", vm.NewFunction(luaPrint))
+	vm.SetGlobal("lua_unmarshal", vm.NewFunction(luaUnMarshal))
+	vm.SetGlobal("lua_marshal", vm.NewFunction(luaMarshal))
 
 	runtime := &LuaRuntime{
 		lua: vm,
@@ -62,7 +64,7 @@ func ConvertMap(l *lua.LState, data map[string]interface{}) *lua.LTable {
 }
 
 func ConvertLuaTable(lv *lua.LTable) map[string]interface{} {
-	returnData, _ := convertLuaValue(lv).(map[string]interface{})
+	returnData, _ := ConvertLuaValue(lv).(map[string]interface{})
 	return returnData
 }
 
@@ -78,7 +80,9 @@ func convertValue(l *lua.LState, val interface{}) lua.LValue {
 	case string:
 		return lua.LString(v)
 	case []byte:
-		return lua.LString(v)
+		ud := l.NewUserData()
+		ud.Value = v
+		return ud
 	case float32:
 		return lua.LNumber(v)
 	case float64:
@@ -106,10 +110,12 @@ func convertValue(l *lua.LState, val interface{}) lua.LValue {
 	}
 }
 
-func convertLuaValue(lv lua.LValue) interface{} {
+func ConvertLuaValue(lv lua.LValue) interface{} {
 	switch v := lv.(type) {
 	case *lua.LNilType:
 		return nil
+	case *lua.LUserData:
+		return v.Value
 	case lua.LBool:
 		return bool(v)
 	case lua.LString:
@@ -126,19 +132,20 @@ func convertLuaValue(lv lua.LValue) interface{} {
 		if maxn == 0 { // table
 			ret := make(map[string]interface{})
 			v.ForEach(func(key, value lua.LValue) {
-				keystr := fmt.Sprint(convertLuaValue(key))
-				ret[keystr] = convertLuaValue(value)
+				keystr := fmt.Sprint(ConvertLuaValue(key))
+				ret[keystr] = ConvertLuaValue(value)
 			})
 			return ret
 		} else { // array
 			ret := make([]interface{}, 0, maxn)
 			for i := 1; i <= maxn; i++ {
-				ret = append(ret, convertLuaValue(v.RawGetInt(i)))
+				ret = append(ret, ConvertLuaValue(v.RawGetInt(i)))
 			}
 			return ret
 		}
 	default:
-		return v
+		slog.LogError("lua", "error lua type %v", lv)
+		panic("error lua type")
 	}
 }
 
@@ -170,7 +177,7 @@ func (this *LuaRuntime) RegisterFunction(s string, f func(*lua.LState) int) {
 	l.SetGlobal(s, l.NewFunction(f))
 }
 
-func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
+func Marshal(b []byte, lv lua.LValue) []byte {
 	var buffer []byte = nil
 	switch v := lv.(type) {
 	case *lua.LNilType:
@@ -191,16 +198,17 @@ func (this *LuaRuntime) Marshal(b []byte, lv lua.LValue) []byte {
 	case *lua.LTable:
 		buffer = append(b, '[')
 		v.ForEach(func(key, value lua.LValue) {
-			buffer = this.Marshal(this.Marshal(buffer, key), value)
+			buffer = Marshal(Marshal(buffer, key), value)
 		})
 		buffer = append(buffer, ']')
 	default:
-		break
+		slog.LogError("lua", "error lua type %v", lv)
+		panic("error lua type")
 	}
 	return buffer
 }
 
-func (this *LuaRuntime) UnMarshal(b []byte) (lua.LValue, []byte) {
+func UnMarshal(b []byte, l *lua.LState) (lua.LValue, []byte) {
 	t := b[0]
 	switch t {
 	case 'z':
@@ -228,13 +236,16 @@ func (this *LuaRuntime) UnMarshal(b []byte) (lua.LValue, []byte) {
 		var key lua.LValue
 		var val lua.LValue
 		tb := b[1:]
-		lt := this.lua.NewTable()
+		lt := l.NewTable()
 		for tb[0] != ']' {
-			key, tb = this.UnMarshal(tb)
-			val, tb = this.UnMarshal(tb)
+			key, tb = UnMarshal(tb, l)
+			val, tb = UnMarshal(tb, l)
 			lt.RawSet(key, val)
 		}
 		return lt, tb[1:]
+	default:
+		slog.LogError("lua", "error lua type %v", t)
+		panic("error lua type")
 	}
 	return lua.LNil, b
 }

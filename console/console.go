@@ -27,10 +27,14 @@ func Run() {
 
 		module_name := contents[0]
 		command := contents[1]
-		args := contents[2:]
+		args_strings := contents[2:]
+		args := make([]interface{}, len(args_strings))
+		for k, v := range args_strings {
+			args[k] = v
+		}
 		m := module.FindModule(module_name)
 		if m != nil {
-			m.RpcCall(command, args)
+			m.RpcCall(command, args...)
 		} else {
 			slog.LogWarning("console", "module [%v] not found!", module_name)
 		}

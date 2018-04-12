@@ -111,7 +111,38 @@ func luaPrint(L *lua.LState) int {
 		return 0
 	}
 
-	s := L.CheckString(1)
-	slog.LogInfo("lua_print", s)
+	s := L.CheckAny(1)
+	slog.LogInfo("lua_print", "%v", s.(interface{}))
+	return 1
+}
+
+func luaUnMarshal(L *lua.LState) int {
+	if L.GetTop() < 1 {
+		L.Push(L.NewTable())
+		return 1
+	}
+
+	s := L.CheckUserData(1)
+	b := s.Value.([]byte)
+	if b == nil || len(b) == 0 {
+		L.Push(L.NewTable())
+		return 1
+	}
+	v, _ := UnMarshal(s.Value.([]byte), L)
+	L.Push(v)
+	return 1
+}
+
+func luaMarshal(L *lua.LState) int {
+	if L.GetTop() < 1 {
+		return 1
+	}
+
+	s := L.CheckTable(1)
+	b := make([]byte, 0, 512)
+	b = Marshal(b, s)
+	ud := L.NewUserData()
+	ud.Value = b
+	L.Push(ud)
 	return 1
 }
