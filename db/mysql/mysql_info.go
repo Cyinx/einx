@@ -24,6 +24,7 @@ func NewMysqlConnInfo(host string, port int, name, user, pass string) *MysqlConn
 	cfg.Net = "tcp"
 	cfg.DBName = name
 	cfg.MultiStatements = true
+	cfg.InterpolateParams = true
 	return &MysqlConnInfo{mysql_conn_info: cfg}
 }
 
