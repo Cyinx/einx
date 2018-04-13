@@ -193,14 +193,38 @@ func Marshal(b []byte, lv lua.LValue) []byte {
 		buffer = append(b, 's', byte(slen), byte(slen>>8), byte(slen>>16), byte(slen>>24))
 		buffer = append(buffer, v...)
 	case lua.LNumber:
-		n := math.Float64bits(float64(v))
-		buffer = append(b, 'n', byte(n), byte(n>>8), byte(n>>16), byte(n>>24), byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
+		f64i := float64(v)
+		I64i := int64(v)
+		if f64i == float64(I64i) {
+			buffer = append(b, 'i')
+			ux := uint64(I64i) << 1
+			if I64i < 0 {
+				ux = ^ux
+			}
+			for ux >= 0x80 {
+				buffer = append(buffer, byte(ux)|0x80)
+				ux >>= 7
+			}
+			buffer = append(buffer, byte(ux))
+		} else {
+			n := math.Float64bits(float64(v))
+			buffer = append(b, 'd', byte(n), byte(n>>8), byte(n>>16), byte(n>>24), byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
+		}
 	case *lua.LTable:
-		buffer = append(b, '[')
-		v.ForEach(func(key, value lua.LValue) {
-			buffer = Marshal(Marshal(buffer, key), value)
-		})
-		buffer = append(buffer, ']')
+		maxn := v.MaxN()
+		if maxn == 0 {
+			buffer = append(b, '[')
+			v.ForEach(func(key, value lua.LValue) {
+				buffer = Marshal(Marshal(buffer, key), value)
+			})
+			buffer = append(buffer, ']')
+		} else {
+			buffer = append(b, '{')
+			for i := 1; i <= maxn; i++ {
+				buffer = Marshal(buffer, v.RawGetInt(i))
+			}
+			buffer = append(buffer, '}')
+		}
 	default:
 		slog.LogError("lua", "error lua type %v", lv)
 		panic("error lua type")
@@ -209,6 +233,9 @@ func Marshal(b []byte, lv lua.LValue) []byte {
 }
 
 func UnMarshal(b []byte, l *lua.LState) (lua.LValue, []byte) {
+	if len(b) < 1 {
+		return lua.LNil, b
+	}
 	t := b[0]
 	switch t {
 	case 'z':
@@ -224,7 +251,7 @@ func UnMarshal(b []byte, l *lua.LState) (lua.LValue, []byte) {
 		}
 		slen := uint32(b[1]) | uint32(b[2])<<8 | uint32(b[3])<<16 | uint32(b[4])<<24
 		return lua.LString(b[5 : 5+slen]), b[5+slen:]
-	case 'n':
+	case 'd':
 		if len(b) < 9 {
 			slog.LogWarning("lua", "error:unknow unmarshal number")
 			return lua.LNil, b
@@ -232,6 +259,37 @@ func UnMarshal(b []byte, l *lua.LState) (lua.LValue, []byte) {
 		n := uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16 | uint64(b[4])<<24 |
 			uint64(b[5])<<32 | uint64(b[6])<<40 | uint64(b[7])<<48 | uint64(b[8])<<56
 		return lua.LNumber(math.Float64frombits(n)), b[9:]
+	case 'i':
+		length := len(b)
+		if length < 2 {
+			slog.LogWarning("lua", "error:unknow unmarshal varint")
+			return lua.LNil, b
+		}
+		var ux uint64
+		var s uint32
+		i := 1
+		for ; i < 9; i++ {
+			if i >= length {
+				slog.LogWarning("lua", "error:unknow unmarshal varint:overflow")
+				return lua.LNil, b
+			}
+			m := b[i]
+			if m < 0x80 {
+				if i == 9 && m > 1 {
+					slog.LogWarning("lua", "error:unknow unmarshal varint:overflow")
+					return lua.LNil, b
+				}
+				ux |= uint64(m) << s
+				break
+			}
+			ux |= uint64(m&0x7f) << s
+			s += 7
+		}
+		x := int64(ux >> 1)
+		if ux&1 != 0 {
+			x = ^x
+		}
+		return lua.LNumber(x), b[i+1:]
 	case '[':
 		var key lua.LValue
 		var val lua.LValue
@@ -241,6 +299,17 @@ func UnMarshal(b []byte, l *lua.LState) (lua.LValue, []byte) {
 			key, tb = UnMarshal(tb, l)
 			val, tb = UnMarshal(tb, l)
 			lt.RawSet(key, val)
+		}
+		return lt, tb[1:]
+	case '{':
+		var val lua.LValue
+		index := 1
+		tb := b[1:]
+		lt := l.NewTable()
+		for tb[0] != '}' {
+			val, tb = UnMarshal(tb, l)
+			lt.RawSetInt(index, val)
+			index++
 		}
 		return lt, tb[1:]
 	default:
