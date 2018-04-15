@@ -71,7 +71,12 @@ func (this *MysqlMgr) GetSession() *sql.DB {
 	return this.session
 }
 
-func (this *MysqlMgr) GetNamedRows(row *sql.Rows) ([]map[string]interface{}, error) {
+func (this *MysqlMgr) GetNamedRows(query interface{}) ([]map[string]interface{}, error) {
+	row, ok := query.(*sql.Rows)
+	var results []map[string]interface{}
+	if ok == false {
+		return results, MYSQL_GET_NAMED_RESULT_ERROR
+	}
 	column_types, err := row.ColumnTypes()
 	if err != nil {
 		slog.LogError("mysql", "columns error:%v", err)
@@ -80,49 +85,50 @@ func (this *MysqlMgr) GetNamedRows(row *sql.Rows) ([]map[string]interface{}, err
 
 	values := make([]interface{}, len(column_types))
 
-	results := *new([]map[string]interface{})
+	for c := true; c || row.NextResultSet(); c = false {
 
-	//maybe this way is better
-	//for k, c := range column_types {
-	//	scans[k] = reflect.New(c.ScanType()).Interface()
-	//}
+		//maybe this way is better
+		//for k, c := range column_types {
+		//	scans[k] = reflect.New(c.ScanType()).Interface()
+		//}
 
-	for k, c := range column_types {
-		switch c.DatabaseTypeName() {
-		case "INT", "BIGINT":
-			values[k] = new(int64)
-		case "DOUBLE", "FLOAT":
-			values[k] = new(float64)
-		case "VARCHAR":
-			values[k] = new(string)
-		case "BLOB":
-			values[k] = new([]byte)
-		default:
-			values[k] = new([]byte)
-		}
-	}
-
-	for row.Next() {
-		if err = row.Scan(values...); err != nil {
-			slog.LogError("mysql", "Scan error:%v", err)
-			return nil, err
-		}
-
-		result := make(map[string]interface{})
-		for k, v := range values {
-			key := column_types[k]
-			switch s := v.(type) {
-			case *int64:
-				result[key.Name()] = *s
-			case *float64:
-				result[key.Name()] = *s
-			case *string:
-				result[key.Name()] = *s
-			case *[]byte:
-				result[key.Name()] = *s
+		for k, c := range column_types {
+			switch c.DatabaseTypeName() {
+			case "INT", "BIGINT":
+				values[k] = new(int64)
+			case "DOUBLE", "FLOAT":
+				values[k] = new(float64)
+			case "VARCHAR":
+				values[k] = new(string)
+			case "BLOB":
+				values[k] = new([]byte)
+			default:
+				values[k] = new([]byte)
 			}
 		}
-		results = append(results, result)
+
+		for row.Next() {
+			if err = row.Scan(values...); err != nil {
+				slog.LogError("mysql", "Scan error:%v", err)
+				return nil, err
+			}
+
+			result := make(map[string]interface{})
+			for k, v := range values {
+				key := column_types[k]
+				switch s := v.(type) {
+				case *int64:
+					result[key.Name()] = *s
+				case *float64:
+					result[key.Name()] = *s
+				case *string:
+					result[key.Name()] = *s
+				case *[]byte:
+					result[key.Name()] = *s
+				}
+			}
+			results = append(results, result)
+		}
 	}
 	return results, nil
 }

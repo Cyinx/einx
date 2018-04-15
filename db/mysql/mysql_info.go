@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	MYSQL_SESSION_NIL_ERR = errors.New("MysqlMgr session nil.")
-	MYSQL_NOTFOUND_ERR    = errors.New("not found!")
-	MYSQL_DBFINDALL_ERR   = errors.New("MysqlMgr found error")
+	MYSQL_SESSION_NIL_ERR        = errors.New("MysqlMgr session nil.")
+	MYSQL_NOTFOUND_ERR           = errors.New("not found!")
+	MYSQL_DBFINDALL_ERR          = errors.New("MysqlMgr found error")
+	MYSQL_GET_NAMED_RESULT_ERROR = errors.New("Mysql GetResult Type Error")
 )
 
 type MysqlConnInfo struct {
