@@ -7,6 +7,7 @@ import (
 	"github.com/Cyinx/einx/lua"
 	"github.com/Cyinx/einx/module"
 	"github.com/Cyinx/einx/network"
+	"github.com/Cyinx/einx/timer"
 	"sync"
 )
 
@@ -26,6 +27,7 @@ type SessionEventMsg = event.SessionEventMsg
 type LuaRuntime = lua_state.LuaRuntime
 type ITcpClientMgr = network.ITcpClientMgr
 type ITcpServerMgr = network.ITcpServerMgr
+type TimerHandler = timer.TimerHandler
 
 type einx struct {
 	end_wait   sync.WaitGroup

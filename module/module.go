@@ -42,6 +42,7 @@ type Module interface {
 	RegisterHandler(ProtoTypeID, MsgHandler)
 	RegisterRpcHandler(string, RpcHandler)
 	AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64
+	RemoveTimer(timer_id uint64)
 }
 
 type ModuleEventer interface {
@@ -82,6 +83,10 @@ func (this *module) Close() {
 
 func (this *module) AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64 {
 	return this.timer_manager.AddTimer(delay, op, args)
+}
+
+func (this *module) RemoveTimer(timer_id uint64) {
+	this.timer_manager.DeleteTimer(timer_id)
 }
 
 func (this *module) PostEvent(event_type EventType, agent Agent, cid ComponentID) {
