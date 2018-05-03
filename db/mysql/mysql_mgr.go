@@ -49,14 +49,14 @@ func (this *MysqlMgr) Start() {
 		this.m.PushEventMsg(e)
 		return
 	}
-	slog.LogInfo("mysql", "Mysql Connect success")
+	slog.LogInfo("mysql", "mysql connect success.")
 }
 
 func (this *MysqlMgr) Close() {
 	if this.session != nil {
 		this.session.Close()
 		this.session = nil
-		slog.LogInfo("mysql", "Disconnect Mysql url: ", this.dbcfg.String())
+		slog.LogInfo("mysql", "mysql disconnect")
 	}
 }
 
