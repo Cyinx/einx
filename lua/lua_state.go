@@ -7,6 +7,9 @@ import (
 	"math"
 )
 
+type LValue = lua.LValue
+type LTable = lua.LTable
+
 type LuaRuntime struct {
 	lua *lua.LState
 }

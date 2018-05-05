@@ -109,7 +109,7 @@ wait_close:
 
 func defer_write_close() {
 	for _, filter := range _log_writer.filter {
-		if filter.file != nil {
+		if filter != nil && filter.file != nil {
 			filter.file.Sync()
 			filter.file.Close()
 		}

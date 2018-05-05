@@ -47,10 +47,10 @@ func UnmarshalMsgBinary(packet *PacketHeader, b []byte) (ProtoTypeID, interface{
 	var msg interface{}
 	switch packet.MsgType {
 	case 'P':
-		msg = MsgProtoUnmarshal(msg_id, msg_body)
+		msg = Serializer.UnmarshalMsg(msg_id, msg_body)
 		break
 	case 'R':
-		msg = nil
+		msg = Serializer.UnmarshalRpc(msg_id, msg_body)
 		break
 	default:
 		break

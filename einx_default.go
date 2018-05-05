@@ -15,6 +15,24 @@ var _einx_default = &einx{
 	close_chan: make(chan bool),
 }
 
+func Run() {
+	go console.Run()
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, os.Kill)
+	sig := <-c
+	slog.LogWarning("einx", "einx will close down (signal: %v)", sig)
+	_einx_default.do_close()
+}
+
+func Close() {
+	_einx_default.close()
+	slog.Close()
+}
+
+func SetNetworkSerializer(m interface{}) {
+	network.SetMsgSerializer(m)
+}
+
 func GetModule(name string) Module {
 	return module.GetModule(name)
 }
@@ -50,18 +68,4 @@ func AddModuleComponent(m module.Module, c Component, mgr interface{}) {
 	e.Sender = c
 	e.Attach = mgr
 	m_eventer.PushEventMsg(e)
-}
-
-func Run() {
-	go console.Run()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, os.Kill)
-	sig := <-c
-	slog.LogWarning("einx", "einx will close down (signal: %v)", sig)
-	_einx_default.do_close()
-}
-
-func Close() {
-	_einx_default.close()
-	slog.Close()
 }

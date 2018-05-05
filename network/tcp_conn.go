@@ -76,7 +76,7 @@ func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, msg interface{}) bool {
 		return false
 	}
 
-	msg_buffer, err := MsgProtoMarshal(msg)
+	msg_buffer, err := Serializer.MarshalMsg(msg)
 	if err != nil {
 		return false
 	}
