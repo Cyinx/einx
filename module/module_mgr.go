@@ -31,7 +31,7 @@ func GetModule(name string) Module {
 		m = &module{
 			id:              GenModuleID(),
 			ev_queue:        event.NewEventQueue(),
-			rpc_chan:        make(chan EventMsg, RPC_CHAN_LENGTH),
+			rpc_queue:       event.NewEventQueue(),
 			name:            name,
 			timer_manager:   timer.NewTimerManager(),
 			msg_handler_map: make(map[ProtoTypeID]MsgHandler),

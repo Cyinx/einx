@@ -11,8 +11,6 @@ import (
 	"time"
 )
 
-const RPC_CHAN_LENGTH = 512
-
 type Agent = agent.Agent
 type AgentID = agent.AgentID
 type AgentSessionMgr = agent.AgentSessionMgr
@@ -54,7 +52,7 @@ type ModuleEventer interface {
 type module struct {
 	id              ModuleID
 	ev_queue        *EventQueue
-	rpc_chan        chan EventMsg
+	rpc_queue       *EventQueue
 	name            string
 	msg_handler_map map[ProtoTypeID]MsgHandler
 	rpc_handler_map map[string]RpcHandler
@@ -112,7 +110,7 @@ func (this *module) RpcCall(name string, args ...interface{}) {
 	rpc_msg.Sender = this
 	rpc_msg.Data = args
 	rpc_msg.RpcName = name
-	this.rpc_chan <- rpc_msg
+	this.rpc_queue.Push(rpc_msg)
 }
 
 func (this *module) RegisterHandler(type_id ProtoTypeID, handler MsgHandler) {
@@ -137,12 +135,12 @@ func (this *module) Run(wait *sync.WaitGroup) {
 	runtime.LockOSThread()
 	wait.Add(1)
 	ev_queue := this.ev_queue
-	rpc_chan := this.rpc_chan
+	rpc_queue := this.rpc_queue
+	rpc_chan := rpc_queue.GetChan()
 	timer_manager := this.timer_manager
 	var event_msg EventMsg = nil
 	var event_count uint32 = 0
 	var event_index uint32 = 0
-	var rpc_msg EventMsg = nil
 	var event_chan = ev_queue.GetChan()
 	var close_flag bool = false
 	var ticker = time.NewTicker(15 * time.Millisecond)
@@ -154,8 +152,14 @@ func (this *module) Run(wait *sync.WaitGroup) {
 			if close_flag == true {
 				goto run_close
 			}
-		case rpc_msg = <-rpc_chan:
-			this.handle_rpc(rpc_msg)
+		case <-rpc_chan:
+			event_count = rpc_queue.Get(event_list, 128)
+			for event_index = 0; event_index < event_count; event_index++ {
+				event_msg = event_list[event_index].(EventMsg)
+				event_list[event_index] = nil
+				this.handle_rpc(event_msg)
+				this.op_count++
+			}
 		case <-event_chan:
 			event_count = ev_queue.Get(event_list, 128)
 			for event_index = 0; event_index < event_count; event_index++ {

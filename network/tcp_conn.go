@@ -3,7 +3,7 @@ package network
 import (
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/event"
-	"github.com/Cyinx/einx/slog"
+	//"github.com/Cyinx/einx/slog"
 	"io"
 	"net"
 	"sync/atomic"
@@ -26,7 +26,7 @@ func NewTcpConn(raw_conn net.Conn, m ModuleEventer, agent_type int16) Agent {
 	tcp_agent := &TcpConn{
 		conn:           raw_conn,
 		close_flag:     0,
-		write_chan:     make(chan *WriteWrapper, 128),
+		write_chan:     make(chan *WriteWrapper, 256),
 		write_stop:     make(chan struct{}),
 		agent_id:       agent.GenAgentID(),
 		module:         m,
@@ -121,7 +121,7 @@ func (this *TcpConn) Run() {
 		header_buffer = header_buffer[0:]
 		msg_id, msg, err := ReadMsgPacket(tcp_conn, &packet, header_buffer, &body_buffer)
 		if err != nil {
-			slog.LogWarning("tcp", "read msg packet error : %s", err.Error())
+			//slog.LogWarning("tcp", "read msg packet error : %s", err.Error())
 			goto wait_close
 		}
 		switch packet.MsgType {
@@ -177,7 +177,7 @@ func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]by
 	if err == nil {
 		return true
 	}
-	slog.LogInfo("tcp", "write msg error %s", err.Error())
+	//slog.LogInfo("tcp", "write msg error %s", err.Error())
 	return false
 }
 
