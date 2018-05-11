@@ -53,9 +53,10 @@ const (
 )
 
 type WriteWrapper struct {
-	msg_type byte
-	msg_id   ProtoTypeID
-	buffer   []byte
+	msg_type    byte
+	pool_buffer bool
+	msg_id      ProtoTypeID
+	buffer      []byte
 }
 
 const (

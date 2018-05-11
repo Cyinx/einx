@@ -1,12 +1,16 @@
 package network
 
+import (
+	"sync"
+)
+
 type ProtoTypeID = uint32
 
 type iserializer interface {
 	UnmarshalMsg(ProtoTypeID, []byte) interface{}
-	MarshalMsg(interface{}) ([]byte, error)
+	MarshalMsg(*sync.Pool, interface{}) ([]byte, error, bool)
 	UnmarshalRpc(ProtoTypeID, []byte) interface{}
-	MarshalRpc(interface{}) ([]byte, error)
+	MarshalRpc(*sync.Pool, interface{}) ([]byte, error, bool)
 }
 
 var Serializer iserializer = nil
