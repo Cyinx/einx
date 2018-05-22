@@ -9,6 +9,7 @@ import (
 
 type LValue = lua.LValue
 type LTable = lua.LTable
+type LNumber = lua.LNumber
 
 type LuaRuntime struct {
 	lua *lua.LState
@@ -164,7 +165,7 @@ func (this *LuaRuntime) PCall(f string, args ...interface{}) {
 	}
 }
 
-func (this *LuaRuntime) PCall2(f string, args ...lua.LValue) {
+func (this *LuaRuntime) PCall2(f string, args ...LValue) {
 	l := this.lua
 	l.Push(l.GetGlobal(f))
 	for _, arg := range args {
@@ -173,6 +174,21 @@ func (this *LuaRuntime) PCall2(f string, args ...lua.LValue) {
 	if err := l.PCall(len(args), -1, nil); err != nil {
 		slog.LogError("lua", "lua pcall2 err:%v", err)
 	}
+}
+
+func (this *LuaRuntime) PCall3(f LValue, args ...LValue) {
+	l := this.lua
+	l.Push(f)
+	for _, arg := range args {
+		l.Push(arg)
+	}
+	if err := l.PCall(len(args), -1, nil); err != nil {
+		slog.LogError("lua", "lua pcall3 err:%v", err)
+	}
+}
+
+func (this *LuaRuntime) GetGlobal(f string) LValue {
+	return this.lua.GetGlobal(f)
 }
 
 func (this *LuaRuntime) RegisterFunction(s string, f func(*lua.LState) int) {
