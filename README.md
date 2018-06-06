@@ -5,12 +5,12 @@ a framework in golang for game server or app server.
 a example server for einx (https://github.com/Cyinx/game_server_einx)
 
 ----------------------------------------------------
-einx 是一个由 golang 编写的用于游戏服务器或者应用服务器的开源手脚架。
+einx 是一个由 golang 编写的用于游戏服务器或者应用服务器的开源框架。
 
 设计核心：
 
 * 模块与组件的组合机制,模块是逻辑核心。
-* 引入lua脚本
+* lua脚本
 * 按业务分离逻辑
 
 ----------------------------------------------------
@@ -121,7 +121,7 @@ import (
 var logic = einx.GetModule("logic")
 func main() {
 	slog.SetLogPath("log/game_server/")
-	logic..AddTcpServer(":2345", clientmgr.Instance)
+	logic.AddTcpServer(":2345", clientmgr.Instance)
 	slog.LogInfo("game_server", "start server...")
 	einx.Run()
 	einx.Close()
