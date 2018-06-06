@@ -79,9 +79,7 @@ func InitLogWriter() {
 }
 
 func run() {
-	defer defer_write_close()
 	_log_writer.end_wait.Add(1)
-
 	for {
 
 		log, ok := <-_log_writer.rec
@@ -94,7 +92,7 @@ func run() {
 		formatHeader(&_log_writer.buf, log.Level, log.Created)
 		_log_writer.buf = append(_log_writer.buf, log.Message...)
 		//_log_writer.buf = append(_log_writer.buf, "\x1b[0m"...)
-		_log_writer.buf = append(_log_writer.buf, '\n')
+		_log_writer.buf = append(_log_writer.buf, "\r\n"...)
 
 		if log.logfile == true {
 			_log_writer.writeFile(log)
@@ -104,10 +102,11 @@ func run() {
 
 	}
 wait_close:
+	_writer_close()
 	_log_writer.end_wait.Done()
 }
 
-func defer_write_close() {
+func _writer_close() {
 	for _, filter := range _log_writer.filter {
 		if filter != nil && filter.file != nil {
 			filter.file.Sync()
