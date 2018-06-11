@@ -2,7 +2,6 @@ package network
 
 import (
 	"github.com/Cyinx/einx/agent"
-	"github.com/Cyinx/einx/event"
 	//"github.com/Cyinx/einx/slog"
 	"io"
 	"net"
@@ -16,13 +15,14 @@ type TcpConn struct {
 	write_chan     chan *WriteWrapper
 	write_stop     chan struct{}
 	module         ModuleEventer
+	handler        AgentHandler
 	last_ping_tick int64
 	remote_addr    string
 	agent_type     int16
 	user_type      int16
 }
 
-func NewTcpConn(raw_conn net.Conn, m ModuleEventer, agent_type int16) Agent {
+func NewTcpConn(raw_conn net.Conn, m ModuleEventer, h AgentHandler, agent_type int16) Agent {
 	tcp_agent := &TcpConn{
 		conn:           raw_conn,
 		close_flag:     0,
@@ -30,6 +30,7 @@ func NewTcpConn(raw_conn net.Conn, m ModuleEventer, agent_type int16) Agent {
 		write_stop:     make(chan struct{}),
 		agent_id:       agent.GenAgentID(),
 		module:         m,
+		handler:        h,
 		last_ping_tick: NowKeepAliveTick,
 		remote_addr:    raw_conn.RemoteAddr().(*net.TCPAddr).String(),
 		agent_type:     agent_type,
@@ -118,19 +119,20 @@ func (this *TcpConn) Run() {
 	var packet PacketHeader
 	header_buffer := make([]byte, MSG_HEADER_LENGTH)
 	body_buffer := make([]byte, MSG_HEADER_LENGTH)
+	h := this.handler
+
 	for {
 		header_buffer = header_buffer[0:]
 		msg_id, msg, err := ReadMsgPacket(tcp_conn, &packet, header_buffer, &body_buffer)
 		if err != nil {
-			//slog.LogWarning("tcp", "read msg packet error : %s", err.Error())
 			goto wait_close
 		}
 		switch packet.MsgType {
 		case 'P':
-			this.module.PostData(event.EVENT_TCP_READ_MSG, msg_id, this, msg)
+			h.ServeHandler(this, msg_id, msg)
 			break
 		case 'R':
-			msg = nil
+			h.ServeRpc(this, msg_id, msg)
 			break
 		case 'T':
 			this.last_ping_tick = NowKeepAliveTick

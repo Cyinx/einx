@@ -37,6 +37,7 @@ type Module interface {
 	GetName() string
 	Run(*sync.WaitGroup)
 	RpcCall(string, ...interface{})
+	RouterAgentHandler(Agent, ProtoTypeID, interface{})
 	RegisterHandler(ProtoTypeID, MsgHandler)
 	RegisterRpcHandler(string, RpcHandler)
 	AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64
@@ -111,6 +112,10 @@ func (this *module) RpcCall(name string, args ...interface{}) {
 	rpc_msg.Data = args
 	rpc_msg.RpcName = name
 	this.rpc_queue.Push(rpc_msg)
+}
+
+func (this *module) RouterAgentHandler(agent Agent, msg_id ProtoTypeID, msg interface{}) {
+	this.PostData(event.EVENT_TCP_READ_MSG, msg_id, agent, msg)
 }
 
 func (this *module) RegisterHandler(type_id ProtoTypeID, handler MsgHandler) {

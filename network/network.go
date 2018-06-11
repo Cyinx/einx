@@ -8,6 +8,8 @@ import (
 
 type Agent = agent.Agent
 type AgentID = agent.AgentID
+type AgentHandler = agent.AgentHandler
+
 type ServerType uint32
 
 type ModuleEventer = module.ModuleEventer

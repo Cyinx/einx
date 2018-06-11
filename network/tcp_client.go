@@ -7,16 +7,18 @@ import (
 )
 
 type TcpClientMgr struct {
-	name         string
-	component_id ComponentID
-	module       ModuleEventer
+	name          string
+	component_id  ComponentID
+	module        ModuleEventer
+	agent_handler AgentHandler
 }
 
-func NewTcpClientMgr(name string, m ModuleEventer) Component {
+func NewTcpClientMgr(name string, m ModuleEventer, h AgentHandler) Component {
 	tcp_client := &TcpClientMgr{
-		name:         name,
-		module:       m,
-		component_id: GenComponentID(),
+		name:          name,
+		module:        m,
+		component_id:  GenComponentID(),
+		agent_handler: h,
 	}
 	return tcp_client
 }
@@ -49,14 +51,17 @@ func (this *TcpClientMgr) connect(addr string, user_type int16) {
 		return
 	}
 
-	tcp_agent := NewTcpConn(raw_conn, this.module, AgentType_TCP_OutGoing)
+	m := this.module
+	h := this.agent_handler
+
+	tcp_agent := NewTcpConn(raw_conn, m, h, AgentType_TCP_OutGoing)
 	tcp_agent.SetUserType(user_type)
-	this.module.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
+	m.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
 
 	go func() {
 		AddPing(tcp_agent.(*TcpConn))
 		tcp_agent.Run()
 		RemovePing(tcp_agent.(*TcpConn))
-		this.module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
+		m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 	}()
 }

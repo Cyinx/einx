@@ -29,6 +29,11 @@ type AgentSessionMgr interface {
 	OnAgentExit(AgentID, Agent)
 }
 
+type AgentHandler interface {
+	ServeHandler(Agent, ProtoTypeID, []byte)
+	ServeRpc(Agent, ProtoTypeID, []byte)
+}
+
 var agent_id uint64 = 0
 
 func GenAgentID() AgentID {

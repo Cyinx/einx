@@ -43,7 +43,7 @@ func NewLuaStae() *lua_state.LuaRuntime {
 
 func AddTcpServerMgr(m module.Module, addr string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
-	tcp_server := network.NewTcpServerMgr(addr, m_eventer)
+	tcp_server := network.NewTcpServerMgr(addr, m_eventer, mgr.(AgentHandler))
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_server
@@ -53,7 +53,7 @@ func AddTcpServerMgr(m module.Module, addr string, mgr interface{}) {
 
 func StartTcpClientMgr(m module.Module, name string, mgr interface{}) {
 	m_eventer := m.(module.ModuleEventer)
-	tcp_client := network.NewTcpClientMgr(name, m_eventer)
+	tcp_client := network.NewTcpClientMgr(name, m_eventer, mgr.(AgentHandler))
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_client

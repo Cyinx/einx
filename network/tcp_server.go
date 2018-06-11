@@ -7,17 +7,19 @@ import (
 )
 
 type TcpServerMgr struct {
-	listener     net.Listener
-	component_id ComponentID
-	module       ModuleEventer
-	addr         string
+	listener      net.Listener
+	component_id  ComponentID
+	module        ModuleEventer
+	agent_handler AgentHandler
+	addr          string
 }
 
-func NewTcpServerMgr(addr string, m ModuleEventer) Component {
+func NewTcpServerMgr(addr string, m ModuleEventer, h AgentHandler) Component {
 	tcp_server := &TcpServerMgr{
-		component_id: GenComponentID(),
-		addr:         addr,
-		module:       m,
+		component_id:  GenComponentID(),
+		addr:          addr,
+		module:        m,
+		agent_handler: h,
 	}
 	return tcp_server
 }
@@ -46,7 +48,8 @@ func (this *TcpServerMgr) Close() {
 }
 
 func (this *TcpServerMgr) do_tcp_accept() {
-
+	m := this.module
+	h := this.agent_handler
 	for {
 		raw_conn, err := this.listener.Accept()
 		if err != nil {
@@ -54,13 +57,14 @@ func (this *TcpServerMgr) do_tcp_accept() {
 			return
 		}
 
-		tcp_agent := NewTcpConn(raw_conn, this.module, AgentType_TCP_InComming)
-		this.module.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
+		tcp_agent := NewTcpConn(raw_conn, m, h, AgentType_TCP_InComming)
+		m.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
+
 		go func() {
 			AddPong(tcp_agent.(*TcpConn))
 			tcp_agent.Run()
 			RemovePong(tcp_agent.(*TcpConn))
-			this.module.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
+			m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 		}()
 	}
 }

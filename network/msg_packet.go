@@ -58,7 +58,7 @@ func UnmarshalMsgBinary(packet *PacketHeader, b []byte) (ProtoTypeID, interface{
 	return msg_id, msg, nil
 }
 
-func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (ProtoTypeID, interface{}, error) {
+func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (ProtoTypeID, []byte, error) {
 	if _, err := io.ReadFull(r, header_buffer); err != nil {
 		return 0, nil, err
 	}
@@ -67,24 +67,29 @@ func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, 
 	msg_packet.BodyLength = uint16(header_buffer[1]) | (uint16(header_buffer[2]) << 8) //小端
 	msg_packet.PacketFlag = header_buffer[3]
 
-	switch msg_packet.MsgType {
-	case 'P', 'R':
-		if cap(*b) < int(msg_packet.BodyLength) {
-			*b = make([]byte, msg_packet.BodyLength)
-		} else {
-			*b = (*b)[0:msg_packet.BodyLength]
-		}
-
-		if _, err := io.ReadFull(r, *b); err != nil {
-			return 0, nil, err
-		}
-		return UnmarshalMsgBinary(msg_packet, *b)
-	case 'T':
+	if msg_packet.MsgType == 'T' {
 		return 0, nil, nil
-	default:
-		break
 	}
-	return 0, nil, errors.New("unknow msg packet")
+
+	if cap(*b) < int(msg_packet.BodyLength) {
+		*b = make([]byte, msg_packet.BodyLength)
+	} else {
+		*b = (*b)[0:msg_packet.BodyLength]
+	}
+
+	if _, err := io.ReadFull(r, *b); err != nil {
+		return 0, nil, err
+	}
+
+	body := *b
+	if len(body) < MSG_ID_LENGTH {
+		return 0, nil, errors.New("msg packet length error")
+	}
+
+	var msg_id ProtoTypeID = 0
+	msg_id = uint32(body[0]) | uint32(body[1])<<8 | uint32(body[2])<<16 | uint32(body[3])<<24 //小端
+	msg_body := body[MSG_ID_LENGTH:]
+	return msg_id, msg_body, nil
 }
 
 func MarshalMsgBinary(msg_id ProtoTypeID, msg_buffer []byte, b *[]byte) bool {
