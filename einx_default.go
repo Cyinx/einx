@@ -29,10 +29,6 @@ func Close() {
 	slog.Close()
 }
 
-func SetNetworkSerializer(m interface{}) {
-	network.SetMsgSerializer(m)
-}
-
 func GetModule(name string) Module {
 	return module.GetModule(name)
 }

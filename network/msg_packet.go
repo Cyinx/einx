@@ -37,27 +37,6 @@ func ReadBinary(r io.Reader, data interface{}) error {
 	return binary.Read(r, binary.LittleEndian, data)
 }
 
-func UnmarshalMsgBinary(packet *PacketHeader, b []byte) (ProtoTypeID, interface{}, error) {
-	var msg_id ProtoTypeID = 0
-	if len(b) < MSG_ID_LENGTH {
-		return 0, nil, errors.New("msg packet length error")
-	}
-	msg_id = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24 //小端
-	msg_body := b[MSG_ID_LENGTH:]
-	var msg interface{}
-	switch packet.MsgType {
-	case 'P':
-		msg = Serializer.UnmarshalMsg(msg_id, msg_body)
-		break
-	case 'R':
-		msg = Serializer.UnmarshalRpc(msg_id, msg_body)
-		break
-	default:
-		break
-	}
-	return msg_id, msg, nil
-}
-
 func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (ProtoTypeID, []byte, error) {
 	if _, err := io.ReadFull(r, header_buffer); err != nil {
 		return 0, nil, err

@@ -9,7 +9,7 @@ import (
 type Agent = agent.Agent
 type AgentID = agent.AgentID
 type AgentHandler = agent.AgentHandler
-
+type ProtoTypeID = uint32
 type ServerType uint32
 
 type ModuleEventer = module.ModuleEventer
@@ -55,10 +55,9 @@ const (
 )
 
 type WriteWrapper struct {
-	msg_type    byte
-	pool_buffer bool
-	msg_id      ProtoTypeID
-	buffer      []byte
+	msg_type byte
+	msg_id   ProtoTypeID
+	buffer   []byte
 }
 
 const (

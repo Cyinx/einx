@@ -10,7 +10,7 @@ type EventType = int
 
 type Agent interface {
 	GetID() AgentID
-	WriteMsg(msg_id ProtoTypeID, msg interface{}) bool
+	WriteMsg(ProtoTypeID, []byte) bool
 	Close()
 	Run()
 	GetType() int16

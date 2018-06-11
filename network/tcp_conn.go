@@ -72,21 +72,15 @@ func (this *TcpConn) do_push_write(wrapper *WriteWrapper) bool {
 	return true
 }
 
-func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, msg interface{}) bool {
+func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, b []byte) bool {
 	if this.IsClosed() == true {
 		return false
 	}
 
-	msg_buffer, err, pbuffer := Serializer.MarshalMsg(buffer_pool, msg)
-	if err != nil {
-		return false
-	}
-
 	wrapper := &WriteWrapper{
-		msg_type:    'P',
-		msg_id:      msg_id,
-		pool_buffer: pbuffer,
-		buffer:      msg_buffer,
+		msg_type: 'P',
+		msg_id:   msg_id,
+		buffer:   b,
 	}
 	return this.do_push_write(wrapper)
 }
@@ -169,13 +163,7 @@ func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]by
 	switch msg.msg_type {
 	case 'P', 'R':
 		if MarshalMsgBinary(msg.msg_id, msg.buffer, write_buffer) == false {
-			if msg.pool_buffer == true {
-				buffer_pool.Put(msg.buffer)
-			}
 			return false
-		}
-		if msg.pool_buffer == true {
-			buffer_pool.Put(msg.buffer)
 		}
 	case 'T':
 		MarshalKeepAliveMsgBinary(write_buffer)
