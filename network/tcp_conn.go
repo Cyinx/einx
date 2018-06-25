@@ -60,7 +60,8 @@ func (this *TcpConn) ReadMsg() ([]byte, error) {
 }
 
 func (this *TcpConn) IsClosed() bool {
-	return atomic.CompareAndSwapUint32(&this.close_flag, 1, 1) == true
+	close_flag := atomic.LoadUint32(&this.close_flag)
+	return close_flag == 1
 }
 
 func (this *TcpConn) do_push_write(wrapper *WriteWrapper) bool {

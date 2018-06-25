@@ -4,7 +4,11 @@ import (
 	"github.com/Cyinx/einx/event"
 	"github.com/Cyinx/einx/slog"
 	"net"
+	"sync/atomic"
+	"time"
 )
+
+const TCP_ACCEPT_SLEEP = 150
 
 type TcpServerMgr struct {
 	listener      net.Listener
@@ -12,6 +16,7 @@ type TcpServerMgr struct {
 	module        ModuleEventer
 	agent_handler AgentHandler
 	addr          string
+	close_flag    int32
 }
 
 func NewTcpServerMgr(addr string, m ModuleEventer, h AgentHandler) Component {
@@ -20,6 +25,7 @@ func NewTcpServerMgr(addr string, m ModuleEventer, h AgentHandler) Component {
 		addr:          addr,
 		module:        m,
 		agent_handler: h,
+		close_flag:    0,
 	}
 	return tcp_server
 }
@@ -44,17 +50,30 @@ func (this *TcpServerMgr) Start() {
 }
 
 func (this *TcpServerMgr) Close() {
-	this.listener.Close()
+	if atomic.CompareAndSwapInt32(&this.close_flag, 0, 1) == true {
+		this.listener.Close()
+	}
+}
+
+func (this *TcpServerMgr) isRunning() bool {
+	close_flag := atomic.LoadInt32(&this.close_flag)
+	return close_flag == 0
 }
 
 func (this *TcpServerMgr) do_tcp_accept() {
 	m := this.module
 	h := this.agent_handler
-	for {
-		raw_conn, err := this.listener.Accept()
+	listener := this.listener
+
+	for this.isRunning() {
+		raw_conn, err := listener.Accept()
 		if err != nil {
-			slog.LogError("tcp_server", "Accept Error:%s", err.Error())
-			return
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				time.Sleep(TCP_ACCEPT_SLEEP)
+			} else if this.isRunning() {
+				slog.LogError("tcp_server", "Accept Error: %v", err)
+			}
+			continue
 		}
 
 		tcp_agent := NewTcpConn(raw_conn, m, h, AgentType_TCP_InComming)
