@@ -14,15 +14,15 @@ type TcpConn struct {
 	close_flag     uint32
 	write_chan     chan *WriteWrapper
 	write_stop     chan struct{}
-	module         ModuleEventer
-	handler        AgentHandler
+	module         EventReceiver
+	handler        SessionHandler
 	last_ping_tick int64
 	remote_addr    string
 	agent_type     int16
 	user_type      int16
 }
 
-func NewTcpConn(raw_conn net.Conn, m ModuleEventer, h AgentHandler, agent_type int16) Agent {
+func NewTcpConn(raw_conn net.Conn, m EventReceiver, h SessionHandler, agent_type int16) NetLinker {
 	tcp_agent := &TcpConn{
 		conn:           raw_conn,
 		close_flag:     0,
@@ -84,6 +84,13 @@ func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, b []byte) bool {
 		buffer:   b,
 	}
 	return this.do_push_write(wrapper)
+}
+
+func (this *TcpConn) RpcCall(name string, b []byte) bool {
+	if this.IsClosed() == true {
+		return false
+	}
+	return true
 }
 
 func (this *TcpConn) LocalAddr() net.Addr {

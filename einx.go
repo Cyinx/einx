@@ -15,21 +15,22 @@ type EventMsg = event.EventMsg
 type EventType = event.EventType
 type Agent = agent.Agent
 type AgentID = agent.AgentID
-type AgentSessionMgr = agent.AgentSessionMgr
-type AgentHandler = agent.AgentHandler
 type Component = component.Component
 type ComponentID = component.ComponentID
 type ComponentMgr = component.ComponentMgr
 type MsgHandler = module.MsgHandler
 type RpcHandler = module.RpcHandler
-type ProtoTypeID = network.ProtoTypeID
 type Module = module.Module
 type SessionEventMsg = event.SessionEventMsg
 type LuaRuntime = lua_state.LuaRuntime
+type NetLinker = network.NetLinker
+type ProtoTypeID = network.ProtoTypeID
+type SessionMgr = network.SessionMgr
+type SessionHandler = network.SessionHandler
 type ITcpClientMgr = network.ITcpClientMgr
 type ITcpServerMgr = network.ITcpServerMgr
 type TimerHandler = timer.TimerHandler
-type ModuleEventer = module.ModuleEventer
+type EventReceiver = event.EventReceiver
 
 type einx struct {
 	end_wait   sync.WaitGroup

@@ -11,7 +11,7 @@ import (
 )
 
 type M = bson.M
-type ModuleEventer = module.ModuleEventer
+type EventReceiver = event.EventReceiver
 
 const (
 	Strong    = 1
@@ -23,7 +23,7 @@ type MongoDBMgr struct {
 	timeout      time.Duration
 	dbcfg        *MongoDBInfo
 	component_id component.ComponentID
-	m            ModuleEventer
+	m            EventReceiver
 }
 
 func NewMongoDBMgr(m module.Module, dbcfg *MongoDBInfo, timeout time.Duration) *MongoDBMgr {
@@ -32,7 +32,7 @@ func NewMongoDBMgr(m module.Module, dbcfg *MongoDBInfo, timeout time.Duration) *
 		timeout:      timeout,
 		dbcfg:        dbcfg,
 		component_id: component.GenComponentID(),
-		m:            m.(module.ModuleEventer),
+		m:            m.(event.EventReceiver),
 	}
 }
 

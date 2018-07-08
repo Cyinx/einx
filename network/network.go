@@ -3,17 +3,14 @@ package network
 import (
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/component"
-	"github.com/Cyinx/einx/module"
+	"github.com/Cyinx/einx/event"
 )
 
 type Agent = agent.Agent
 type AgentID = agent.AgentID
-type AgentHandler = agent.AgentHandler
 type ProtoTypeID = uint32
 type ServerType uint32
-
-type ModuleEventer = module.ModuleEventer
-
+type EventReceiver = event.EventReceiver
 type ComponentID = component.ComponentID
 type ComponentType = component.ComponentType
 type Component = component.Component
@@ -31,10 +28,6 @@ const (
 	AgentType_TCP_InComming = agent.AgentType_TCP_InComming
 	AgentType_TCP_OutGoing  = agent.AgentType_TCP_OutGoing
 )
-
-type Connection interface {
-	RemoteAddr() string
-}
 
 type Linker interface {
 	Ping()
@@ -64,3 +57,21 @@ const (
 	COMPONENT_TYPE_TCP_SERVER = component.COMPONENT_TYPE_TCP_SERVER
 	COMPONENT_TYPE_TCP_CLIENT = component.COMPONENT_TYPE_TCP_CLIENT
 )
+
+type NetLinker interface {
+	RemoteAddr() string
+	WriteMsg(msg_id ProtoTypeID, b []byte) bool
+	GetUserType() int16
+	SetUserType(int16)
+	Run()
+}
+
+type SessionMgr interface {
+	OnLinkerConneted(AgentID, Agent)
+	OnLinkerClosed(AgentID, Agent)
+}
+
+type SessionHandler interface {
+	ServeHandler(Agent, ProtoTypeID, []byte)
+	ServeRpc(Agent, ProtoTypeID, []byte)
+}

@@ -114,3 +114,9 @@ func (this *RpcEventMsg) Reset() {
 	this.RpcName = ""
 	this.Data = nil
 }
+
+type EventReceiver interface {
+	PostEvent(EventType, Agent, ComponentID)
+	PostData(EventType, ProtoTypeID, Agent, interface{})
+	PushEventMsg(ev EventMsg)
+}

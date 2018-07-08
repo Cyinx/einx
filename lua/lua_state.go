@@ -7,6 +7,7 @@ import (
 	"math"
 )
 
+type LState = lua.LState
 type LValue = lua.LValue
 type LTable = lua.LTable
 type LNumber = lua.LNumber
@@ -15,7 +16,7 @@ type LuaRuntime struct {
 	lua *lua.LState
 }
 
-func (this *LuaRuntime) GetVm() *lua.LState {
+func (this *LuaRuntime) GetVm() *LState {
 	return this.lua
 }
 func NewLuaStae() *LuaRuntime {

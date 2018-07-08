@@ -4,6 +4,7 @@ import (
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/component"
 	"github.com/Cyinx/einx/event"
+	"github.com/Cyinx/einx/network"
 	"github.com/Cyinx/einx/slog"
 	"github.com/Cyinx/einx/timer"
 	"runtime"
@@ -13,7 +14,6 @@ import (
 
 type Agent = agent.Agent
 type AgentID = agent.AgentID
-type AgentSessionMgr = agent.AgentSessionMgr
 type Component = component.Component
 type ComponentID = component.ComponentID
 type ComponentMgr = component.ComponentMgr
@@ -26,6 +26,7 @@ type RpcEventMsg = event.RpcEventMsg
 type EventQueue = event.EventQueue
 type TimerHandler = timer.TimerHandler
 type TimerManager = timer.TimerManager
+type SessionMgr = network.SessionMgr
 type ProtoTypeID = uint32
 type ModuleID = uint32
 type DispatchHandler func(event_msg EventMsg)
@@ -42,12 +43,6 @@ type Module interface {
 	RegisterRpcHandler(string, RpcHandler)
 	AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64
 	RemoveTimer(timer_id uint64)
-}
-
-type ModuleEventer interface {
-	PostEvent(EventType, Agent, ComponentID)
-	PostData(EventType, ProtoTypeID, Agent, interface{})
-	PushEventMsg(ev EventMsg)
 }
 
 type module struct {
@@ -255,7 +250,7 @@ func (this *module) handle_agent_enter(event_msg EventMsg) {
 	this.agent_map[agent.GetID()] = agent
 
 	if sesmgr, ok := this.commgr_map[ses_event.Cid]; ok == true {
-		sesmgr.(AgentSessionMgr).OnAgentEnter(agent.GetID(), agent)
+		sesmgr.(SessionMgr).OnLinkerConneted(agent.GetID(), agent)
 		return
 	}
 	slog.LogError("agent", "module[%v] agent enter not found component[%v]", this.name, ses_event.Cid)
@@ -266,7 +261,7 @@ func (this *module) handle_agent_closed(event_msg EventMsg) {
 	agent := ses_event.Sender.(Agent)
 	delete(this.agent_map, agent.GetID())
 	if sesmgr, ok := this.commgr_map[ses_event.Cid]; ok == true {
-		sesmgr.(AgentSessionMgr).OnAgentExit(agent.GetID(), agent)
+		sesmgr.(SessionMgr).OnLinkerClosed(agent.GetID(), agent)
 		return
 	}
 	slog.LogError("agent", "module[%v] agent closed not found component[%v]", this.name, ses_event.Cid)

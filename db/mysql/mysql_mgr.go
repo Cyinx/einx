@@ -10,14 +10,14 @@ import (
 	"time"
 )
 
-type ModuleEventer = module.ModuleEventer
+type EventReceiver = event.EventReceiver
 
 type MysqlMgr struct {
 	session      *sql.DB
 	timeout      time.Duration
 	dbcfg        *MysqlConnInfo
 	component_id component.ComponentID
-	m            ModuleEventer
+	m            EventReceiver
 }
 
 func NewMysqlMgr(m module.Module, dbcfg *MysqlConnInfo, timeout time.Duration) *MysqlMgr {
@@ -26,7 +26,7 @@ func NewMysqlMgr(m module.Module, dbcfg *MysqlConnInfo, timeout time.Duration) *
 		timeout:      timeout,
 		dbcfg:        dbcfg,
 		component_id: component.GenComponentID(),
-		m:            m.(module.ModuleEventer),
+		m:            m.(event.EventReceiver),
 	}
 }
 

@@ -89,11 +89,11 @@ func (this *ClientMgr) GetClient(agent_id AgentID) (Agent, bool) {
 	return client, ok
 }
 
-func (this *ClientMgr) OnAgentEnter(id AgentID, agent Agent) {
+func (this *ClientMgr) OnLinkerConneted(id AgentID, agent Agent) {
 	this.client_map[id] = agent //新连接连入服务器
 }
 
-func (this *ClientMgr) OnAgentExit(id AgentID, agent Agent) {
+func (this *ClientMgr) OnLinkerClosed(id AgentID, agent Agent) {
 	delete(this.client_map, id) //连接断开
 }
 
