@@ -6,7 +6,6 @@ import (
 	"github.com/Cyinx/einx/event"
 	"github.com/Cyinx/einx/module"
 	"github.com/Cyinx/einx/slog"
-	_ "github.com/go-sql-driver/mysql"
 	"time"
 )
 
@@ -72,6 +71,10 @@ func (this *MysqlMgr) GetSession() *sql.DB {
 }
 
 func (this *MysqlMgr) GetNamedRows(query interface{}) ([]map[string]interface{}, error) {
+	return GetNamedRows(query)
+}
+
+func GetNamedRows(query interface{}) ([]map[string]interface{}, error) {
 	row, ok := query.(*sql.Rows)
 	var results []map[string]interface{}
 	if ok == false {
@@ -94,7 +97,9 @@ func (this *MysqlMgr) GetNamedRows(query interface{}) ([]map[string]interface{},
 
 		for k, c := range column_types {
 			switch c.DatabaseTypeName() {
-			case "INT", "BIGINT":
+			case "INT":
+				values[k] = new(int32)
+			case "BIGINT":
 				values[k] = new(int64)
 			case "DOUBLE", "FLOAT":
 				values[k] = new(float64)

@@ -14,7 +14,6 @@ type TcpConn struct {
 	close_flag     uint32
 	write_chan     chan *WriteWrapper
 	write_stop     chan struct{}
-	module         EventReceiver
 	handler        SessionHandler
 	last_ping_tick int64
 	remote_addr    string
@@ -22,14 +21,13 @@ type TcpConn struct {
 	user_type      int16
 }
 
-func NewTcpConn(raw_conn net.Conn, m EventReceiver, h SessionHandler, agent_type int16) NetLinker {
+func NewTcpConn(raw_conn net.Conn, h SessionHandler, agent_type int16) NetLinker {
 	tcp_agent := &TcpConn{
 		conn:           raw_conn,
 		close_flag:     0,
 		write_chan:     make(chan *WriteWrapper, 256),
 		write_stop:     make(chan struct{}),
 		agent_id:       agent.GenAgentID(),
-		module:         m,
 		handler:        h,
 		last_ping_tick: NowKeepAliveTick,
 		remote_addr:    raw_conn.RemoteAddr().(*net.TCPAddr).String(),
@@ -86,11 +84,18 @@ func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, b []byte) bool {
 	return this.do_push_write(wrapper)
 }
 
-func (this *TcpConn) RpcCall(name string, b []byte) bool {
+func (this *TcpConn) RpcCall(msg_id ProtoTypeID, b []byte) bool {
 	if this.IsClosed() == true {
 		return false
 	}
-	return true
+
+	wrapper := &WriteWrapper{
+		msg_type: 'R',
+		msg_id:   msg_id,
+		buffer:   b,
+	}
+
+	return this.do_push_write(wrapper)
 }
 
 func (this *TcpConn) LocalAddr() net.Addr {
@@ -170,7 +175,7 @@ wait_close:
 func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]byte) bool {
 	switch msg.msg_type {
 	case 'P', 'R':
-		if MarshalMsgBinary(msg.msg_id, msg.buffer, write_buffer) == false {
+		if MarshalMsgBinary(msg.msg_type, msg.msg_id, msg.buffer, write_buffer) == false {
 			return false
 		}
 	case 'T':

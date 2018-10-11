@@ -4,15 +4,13 @@ import (
 	"sync/atomic"
 )
 
-type AgentID uint64
+type AgentID = uint64
 type ProtoTypeID = uint32
 type EventType = int
 
 type Agent interface {
 	GetID() AgentID
 	Close()
-	Run()
-	GetType() int16
 }
 
 const (

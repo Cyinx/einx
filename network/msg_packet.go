@@ -12,9 +12,10 @@ type IReader interface {
 }
 
 const (
-	MSG_KEY_LENGTH    = 32
-	MSG_HEADER_LENGTH = 4
-	MSG_ID_LENGTH     = 4
+	MSG_KEY_LENGTH      = 32
+	MSG_HEADER_LENGTH   = 4
+	MSG_ID_LENGTH       = 4
+	MSG_MAX_BODY_LENGTH = 8096
 )
 
 // --------------------------------------------------------------------------------------------------------
@@ -38,7 +39,7 @@ func ReadBinary(r io.Reader, data interface{}) error {
 }
 
 func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (ProtoTypeID, []byte, error) {
-	if _, err := io.ReadFull(r, header_buffer); err != nil {
+	if _, err := io.ReadFull(r, 4); err != nil {
 		return 0, nil, err
 	}
 
@@ -48,6 +49,10 @@ func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, 
 
 	if msg_packet.MsgType == 'T' {
 		return 0, nil, nil
+	}
+
+	if msg_packet.BodyLength >= MSG_MAX_BODY_LENGTH {
+		return 0, nil, errors.New("msg packet length too long.")
 	}
 
 	if cap(*b) < int(msg_packet.BodyLength) {
@@ -71,7 +76,7 @@ func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, 
 	return msg_id, msg_body, nil
 }
 
-func MarshalMsgBinary(msg_id ProtoTypeID, msg_buffer []byte, b *[]byte) bool {
+func MarshalMsgBinary(msg_type byte, msg_id ProtoTypeID, msg_buffer []byte, b *[]byte) bool {
 	var msg_body_length int = len(msg_buffer) + MSG_ID_LENGTH
 	var msg_length int = msg_body_length + MSG_HEADER_LENGTH
 
@@ -83,7 +88,7 @@ func MarshalMsgBinary(msg_id ProtoTypeID, msg_buffer []byte, b *[]byte) bool {
 
 	buffer := *b
 	//packet header
-	buffer[0] = 'P'
+	buffer[0] = msg_type
 	buffer[1] = byte(msg_body_length & 0xFF)
 	buffer[2] = byte(msg_body_length >> 8)
 	buffer[3] = 0

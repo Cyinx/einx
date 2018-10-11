@@ -76,7 +76,7 @@ func (this *TcpServerMgr) do_tcp_accept() {
 			continue
 		}
 
-		tcp_agent := NewTcpConn(raw_conn, m, h, AgentType_TCP_InComming)
+		tcp_agent := NewTcpConn(raw_conn, h, AgentType_TCP_InComming)
 		m.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent.(Agent), this.component_id)
 
 		go func() {

@@ -54,7 +54,7 @@ func (this *TcpClientMgr) connect(addr string, user_type int16) {
 	m := this.module
 	h := this.agent_handler
 
-	tcp_linker := NewTcpConn(raw_conn, m, h, AgentType_TCP_OutGoing)
+	tcp_linker := NewTcpConn(raw_conn, h, AgentType_TCP_OutGoing)
 	tcp_linker.SetUserType(user_type)
 	m.PostEvent(event.EVENT_TCP_CONNECTED, tcp_linker.(Agent), this.component_id)
 

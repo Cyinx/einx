@@ -1,10 +1,10 @@
 package component
 
 import (
-	"sync/atomic"
+	"github.com/Cyinx/einx/agent"
 )
 
-type ComponentID = uint32
+type ComponentID = agent.AgentID
 type ComponentType uint16
 type EventType = int
 
@@ -15,15 +15,8 @@ type Component interface {
 	Close()
 }
 
-var component_id ComponentID = 0
-
 func GenComponentID() ComponentID {
-	return atomic.AddUint32(&component_id, 1)
-}
-
-type ComponentMgr interface {
-	OnComponentCreate(ComponentID, Component)
-	OnComponentError(Component, error)
+	return agent.GenAgentID()
 }
 
 const (

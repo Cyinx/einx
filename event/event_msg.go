@@ -27,7 +27,6 @@ const (
 
 type EventMsg interface {
 	GetType() EventType
-	GetSender() interface{}
 	Reset()
 }
 
@@ -61,7 +60,7 @@ func (this *SessionEventMsg) GetType() EventType {
 	return this.MsgType
 }
 
-func (this *SessionEventMsg) GetSender() interface{} {
+func (this *SessionEventMsg) GetSender() Agent {
 	return this.Sender
 }
 
@@ -82,7 +81,7 @@ func (this *DataEventMsg) GetType() EventType {
 	return this.MsgType
 }
 
-func (this *DataEventMsg) GetSender() interface{} {
+func (this *DataEventMsg) GetSender() Agent {
 	return this.Sender
 }
 
@@ -95,7 +94,7 @@ func (this *DataEventMsg) Reset() {
 
 type RpcEventMsg struct {
 	MsgType EventType
-	Sender  interface{}
+	Sender  Agent
 	RpcName string
 	Data    []interface{}
 }
@@ -104,7 +103,7 @@ func (this *RpcEventMsg) GetType() EventType {
 	return this.MsgType
 }
 
-func (this *RpcEventMsg) GetSender() interface{} {
+func (this *RpcEventMsg) GetSender() Agent {
 	return this.Sender
 }
 

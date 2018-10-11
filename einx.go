@@ -3,6 +3,7 @@ package einx
 import (
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/component"
+	"github.com/Cyinx/einx/context"
 	"github.com/Cyinx/einx/event"
 	"github.com/Cyinx/einx/lua"
 	"github.com/Cyinx/einx/module"
@@ -17,10 +18,11 @@ type Agent = agent.Agent
 type AgentID = agent.AgentID
 type Component = component.Component
 type ComponentID = component.ComponentID
-type ComponentMgr = component.ComponentMgr
 type MsgHandler = module.MsgHandler
 type RpcHandler = module.RpcHandler
-type Module = module.Module
+type WorkerPool = module.WorkerPool
+type ModuleRouter = module.ModuleRouter
+type ComponentMgr = module.ComponentMgr
 type SessionEventMsg = event.SessionEventMsg
 type LuaRuntime = lua_state.LuaRuntime
 type NetLinker = network.NetLinker
@@ -31,6 +33,8 @@ type ITcpClientMgr = network.ITcpClientMgr
 type ITcpServerMgr = network.ITcpServerMgr
 type TimerHandler = timer.TimerHandler
 type EventReceiver = event.EventReceiver
+type Module = context.Module
+type Context = context.Context
 
 type einx struct {
 	end_wait   sync.WaitGroup

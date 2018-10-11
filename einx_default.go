@@ -17,6 +17,7 @@ var _einx_default = &einx{
 
 func Run() {
 	go console.Run()
+	module.Start()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill)
 	sig := <-c
@@ -64,4 +65,12 @@ func AddModuleComponent(m module.Module, c Component, mgr interface{}) {
 	e.Sender = c
 	e.Attach = mgr
 	m_eventer.PushEventMsg(e)
+}
+
+func CreateModuleWorkers(name string, size int) WorkerPool {
+	return module.CreateWorkers(name, size)
+}
+
+func GetWorkerPool(name string) WorkerPool {
+	return module.GetWorkerPool(name)
 }
