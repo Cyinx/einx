@@ -39,7 +39,7 @@ func ReadBinary(r io.Reader, data interface{}) error {
 }
 
 func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (ProtoTypeID, []byte, error) {
-	if _, err := io.ReadFull(r, 4); err != nil {
+	if _, err := io.ReadFull(r, header_buffer); err != nil {
 		return 0, nil, err
 	}
 
