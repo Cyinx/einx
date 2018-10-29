@@ -67,32 +67,30 @@ func (this *timerWheel) delete_timer(run_tick uint64, seq_id uint32) bool {
 }
 
 func (this *timerWheel) execute(now uint64, count uint32) uint32 {
-	if this.prev_wheel != nil {
-		return count
+	if this.prev_wheel != nil || now < this.baseTick {
+		return 0
 	}
 
-	elapsedTime := uint64((now - this.baseTick))
+	elapsedTime := uint64(now - this.baseTick)
 	loopTimes := uint64(1 + elapsedTime)
 
 	nowIndex := this.index
 	this.index += uint8(elapsedTime)
 	this.baseTick += elapsedTime
 
-	var run_count uint32
-	for run_count = 0; run_count < count; run_count++ {
-		loopTimes--
+	var run_count uint32 = 0
+	for ; run_count < count && loopTimes > 0; loopTimes-- {
 		timer_list := this.array[nowIndex]
-		run_count = run_count + timer_list.execute(now, count-run_count)
-
-		if loopTimes <= 0 {
-			break
+		c, b := timer_list.execute(now, count-run_count)
+		run_count = run_count + c
+		if b == false {
+			return run_count
 		}
 		nowIndex++
 		if nowIndex == 0 {
 			this.TurnWheel()
 		}
 	}
-
 	return run_count
 }
 

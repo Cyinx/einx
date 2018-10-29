@@ -92,19 +92,27 @@ func (this *timerList) delete_timer(seqID uint32) bool {
 	return false
 }
 
-func (this *timerList) execute(now uint64, count uint32) uint32 {
+func (this *timerList) execute(now uint64, count uint32) (uint32, bool) {
 	var running_timer *xtimer = nil
 	run_count := uint32(0)
-	for this.head != nil && run_count < count {
-		run_count++
+
+	for ; this.head != nil; run_count++ {
+
+		running_timer = this.head
+		if run_count >= count || running_timer.runTick > now {
+			return run_count, false
+		}
+
 		running_timer = this.head
 		running_timer.running = true
 		running_timer.handler(running_timer.args)
 		this.head = running_timer.next
+
 	}
+
 	if this.head == nil {
 		this.tail = nil
 	}
 
-	return run_count
+	return run_count, true
 }
