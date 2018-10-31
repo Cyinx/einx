@@ -31,7 +31,9 @@ einx 是一个由 golang 编写的用于游戏服务器或者应用服务器的�
 ----------------------------------
 首先安装 einx
 ```
-git clone https://github.com/Cyinx/einx.git
+go get github.com/go-sql-driver/mysql
+go get github.com/yuin/gopher-lua
+go get github.com/Cyinx/einx
 ```
 
 创建一个简单的einx例子:
