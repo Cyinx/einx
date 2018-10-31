@@ -4,6 +4,7 @@ import (
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/component"
 	"github.com/Cyinx/einx/event"
+	"net"
 )
 
 type Agent = agent.Agent
@@ -61,7 +62,7 @@ const (
 type NetLinker interface {
 	GetID() AgentID
 	Close()
-	RemoteAddr() string
+	RemoteAddr() net.Addr
 	WriteMsg(msg_id ProtoTypeID, b []byte) bool
 	GetUserType() int16
 	SetUserType(int16)

@@ -102,8 +102,8 @@ func (this *TcpConn) LocalAddr() net.Addr {
 	return nil
 }
 
-func (this *TcpConn) RemoteAddr() string {
-	return this.remote_addr
+func (this *TcpConn) RemoteAddr() net.Addr {
+	return this.conn.RemoteAddr()
 }
 
 func (this *TcpConn) Close() {
