@@ -16,6 +16,7 @@ func UnixTS() uint64 {
 }
 
 func NewTimerManager() *TimerManager {
+
 	timer_manager := &TimerManager{
 		seqIDIndex: 0,
 	}

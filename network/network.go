@@ -59,6 +59,8 @@ const (
 )
 
 type NetLinker interface {
+	GetID() AgentID
+	Close()
 	RemoteAddr() string
 	WriteMsg(msg_id ProtoTypeID, b []byte) bool
 	GetUserType() int16
