@@ -45,6 +45,10 @@ type ModuleWoker interface {
 	Run(*sync.WaitGroup)
 }
 
+var (
+	MODULE_TIMER_INTERVAL time.Duration = 5
+)
+
 type module struct {
 	id              AgentID
 	ev_queue        *EventQueue
@@ -159,7 +163,7 @@ func (this *module) Run(wait *sync.WaitGroup) {
 		event_chan           = ev_queue.GetChan()
 		rpc_queue            = this.rpc_queue
 		rpc_chan             = rpc_queue.GetChan()
-		ticker               = time.NewTicker(15 * time.Millisecond)
+		ticker               = time.NewTicker(MODULE_TIMER_INTERVAL * time.Millisecond)
 	)
 
 	event_list := make([]interface{}, 128)
@@ -186,8 +190,8 @@ func (this *module) Run(wait *sync.WaitGroup) {
 				this.op_count++
 			}
 		case <-ticker.C:
-			timer_manager.Execute(100)
 		}
+		timer_manager.Execute(100)
 	}
 
 run_close:

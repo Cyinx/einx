@@ -11,8 +11,10 @@ type TimerManager struct {
 	timer_wheels [5]*timerWheel
 }
 
+var beginTick uint64 = uint64(time.Now().UnixNano() / 1e6)
+
 func UnixTS() uint64 {
-	return uint64(time.Now().UnixNano() / 1e6)
+	return uint64(time.Now().UnixNano()/1e6) - beginTick
 }
 
 func NewTimerManager() *TimerManager {
