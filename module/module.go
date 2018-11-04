@@ -145,7 +145,6 @@ func (this *module) RecoverRun(wait *sync.WaitGroup) {
 		slog.LogError("module_recovery", "recover :%v", r)
 		debug.PrintStack()
 		go this.Run(wait) // continue to run
-		return
 	}
 }
 

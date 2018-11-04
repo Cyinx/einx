@@ -2,6 +2,7 @@ package slog
 
 import (
 	"os"
+	"runtime/debug"
 	"sync"
 )
 
@@ -32,15 +33,15 @@ var _log_writer = &LogWriter{
 	path:   "",
 }
 
-func WriteRecover(log *LogRecord) {
-	if e := recover(); e != nil {
-
+func LogRunRecover(logwriter *LogWriter) {
+	if r := recover(); r != nil {
+		LogError("log_manager", "log worker recover[%v]", r)
+		debug.PrintStack()
+		go run()
 	}
 }
 
 func (this *LogWriter) writeFile(log *LogRecord) {
-	defer WriteRecover(log)
-
 	file_writer, ok := _log_writer.filter[log.Name]
 	if ok == false {
 		fd, err := os.OpenFile(this.path+log.Name+".log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
@@ -79,9 +80,10 @@ func InitLogWriter() {
 }
 
 func run() {
+	defer LogRunRecover(_log_writer)
 	_log_writer.end_wait.Add(1)
+	defer _log_writer.end_wait.Done()
 	for {
-
 		log, ok := <-_log_writer.rec
 		if ok == false || log == nil {
 			goto wait_close
@@ -103,7 +105,6 @@ func run() {
 	}
 wait_close:
 	_writer_close()
-	_log_writer.end_wait.Done()
 }
 
 func _writer_close() {

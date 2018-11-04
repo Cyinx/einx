@@ -5,24 +5,17 @@ import (
 	"time"
 )
 
-const (
-	LOG_VERSION = "slog-v0.1"
-	LOG_MAJOR   = 3
-	LOG_MINOR   = 0
-	LOG_BUILD   = 1
-)
-
 type Level int
 
 const (
-	INFO Level = iota
-	DEBUG
+	DEBUG Level = iota
+	INFO
 	WARNING
 	ERROR
 )
 
 var (
-	levelStrings = [...]string{"INFO", "DEBG", "WARN", "EROR"}
+	levelStrings = [...]string{"DEBG", "INFO", "WARN", "EROR"}
 )
 
 const LogBufferLength = 65535
@@ -42,17 +35,14 @@ type LogRecord struct {
 	Message string
 }
 
-type LogManager struct {
-	Name  string
-	level Level
-}
+var LOG_LEVEL Level = DEBUG
 
 func init() {
 	InitLogWriter()
 }
 
-func (this *LogManager) post_log(debuglv Level, is_log_file bool, name string, format string, args ...interface{}) {
-	if this.level > debuglv {
+func post_log(debuglv Level, is_log_file bool, name string, format string, args ...interface{}) {
+	if LOG_LEVEL > debuglv {
 		return
 	}
 
@@ -74,22 +64,20 @@ func (this *LogManager) post_log(debuglv Level, is_log_file bool, name string, f
 	_log_writer.LogWrite(rec)
 }
 
-var _log_manager_default = &LogManager{"default", INFO}
-
-func LogInfo(name string, format string, args ...interface{}) {
-	_log_manager_default.post_log(INFO, false, name, format, args...)
+func LogDebug(name string, format string, args ...interface{}) {
+	post_log(DEBUG, true, name, format, args...)
 }
 
-func LogDebug(name string, format string, args ...interface{}) {
-	_log_manager_default.post_log(DEBUG, true, name, format, args...)
+func LogInfo(name string, format string, args ...interface{}) {
+	post_log(INFO, false, name, format, args...)
 }
 
 func LogWarning(name string, format string, args ...interface{}) {
-	_log_manager_default.post_log(WARNING, true, name, format, args...)
+	post_log(WARNING, true, name, format, args...)
 }
 
 func LogError(name string, format string, args ...interface{}) {
-	_log_manager_default.post_log(ERROR, true, name, format, args...)
+	post_log(ERROR, true, name, format, args...)
 }
 
 func SetLogPath(path string) {
