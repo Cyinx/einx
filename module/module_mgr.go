@@ -33,7 +33,6 @@ func NewModule(name string) Module {
 	m := &module{
 		id:              GenModuleID(),
 		ev_queue:        event.NewEventQueue(),
-		rpc_queue:       event.NewEventQueue(),
 		name:            name,
 		timer_manager:   timer.NewTimerManager(),
 		msg_handler_map: make(map[ProtoTypeID]MsgHandler),

@@ -24,11 +24,23 @@ func NewTimerManager() *TimerManager {
 	}
 
 	now := UnixTS()
-	timer_manager.timer_wheels[0] = newTimerWheel(1, 0, nil, timer_manager.timer_wheels[1], now)
-	timer_manager.timer_wheels[1] = newTimerWheel(0xff+1, 8, timer_manager.timer_wheels[0], timer_manager.timer_wheels[2], now)
-	timer_manager.timer_wheels[2] = newTimerWheel(0xffff+1, 16, timer_manager.timer_wheels[1], timer_manager.timer_wheels[3], now)
-	timer_manager.timer_wheels[3] = newTimerWheel(0xffffff+1, 24, timer_manager.timer_wheels[2], timer_manager.timer_wheels[4], now)
-	timer_manager.timer_wheels[4] = newTimerWheel(0xffffffff+1, 32, timer_manager.timer_wheels[3], nil, now)
+
+	timer_wheels := &timer_manager.timer_wheels
+
+	timer_wheels[0] = newTimerWheel(1, 0, now)
+	timer_wheels[1] = newTimerWheel(0xff+1, 8, now)
+	timer_wheels[2] = newTimerWheel(0xffff+1, 16, now)
+	timer_wheels[3] = newTimerWheel(0xffffff+1, 24, now)
+	timer_wheels[4] = newTimerWheel(0xffffffff+1, 32, now)
+
+	timer_wheels[0].next_wheel = timer_wheels[1]
+	timer_wheels[1].prev_wheel = timer_wheels[0]
+	timer_wheels[1].next_wheel = timer_wheels[2]
+	timer_wheels[2].prev_wheel = timer_wheels[1]
+	timer_wheels[2].next_wheel = timer_wheels[3]
+	timer_wheels[3].prev_wheel = timer_wheels[2]
+	timer_wheels[3].next_wheel = timer_wheels[4]
+	timer_wheels[4].prev_wheel = timer_wheels[3]
 
 	return timer_manager
 }

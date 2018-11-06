@@ -1,6 +1,10 @@
 package module
 
 import (
+	"runtime/debug"
+	"sync"
+	"time"
+
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/component"
 	"github.com/Cyinx/einx/context"
@@ -8,9 +12,6 @@ import (
 	"github.com/Cyinx/einx/network"
 	"github.com/Cyinx/einx/slog"
 	"github.com/Cyinx/einx/timer"
-	"runtime/debug"
-	"sync"
-	"time"
 )
 
 type Agent = agent.Agent
@@ -52,7 +53,6 @@ var (
 type module struct {
 	id              AgentID
 	ev_queue        *EventQueue
-	rpc_queue       *EventQueue
 	name            string
 	msg_handler_map map[ProtoTypeID]MsgHandler
 	rpc_handler_map map[string]RpcHandler
@@ -115,7 +115,7 @@ func (this *module) RpcCall(name string, args ...interface{}) {
 	rpc_msg.Sender = this
 	rpc_msg.Data = args
 	rpc_msg.RpcName = name
-	this.rpc_queue.Push(rpc_msg)
+	this.ev_queue.Push(rpc_msg)
 }
 
 func (this *module) RouterMsg(agent Agent, msg_id ProtoTypeID, msg interface{}) {
@@ -160,8 +160,6 @@ func (this *module) Run(wait *sync.WaitGroup) {
 		close_flag  bool     = false
 		ev_queue             = this.ev_queue
 		event_chan           = ev_queue.GetChan()
-		rpc_queue            = this.rpc_queue
-		rpc_chan             = rpc_queue.GetChan()
 		ticker               = time.NewTicker(MODULE_TIMER_INTERVAL * time.Millisecond)
 	)
 
@@ -171,14 +169,6 @@ func (this *module) Run(wait *sync.WaitGroup) {
 		case close_flag = <-this.close_chan:
 			if close_flag == true {
 				goto run_close
-			}
-		case <-rpc_chan:
-			event_count = rpc_queue.Get(event_list, 128)
-			for event_index = 0; event_index < event_count; event_index++ {
-				event_msg = event_list[event_index].(EventMsg)
-				event_list[event_index] = nil
-				this.handle_rpc(event_msg)
-				this.op_count++
 			}
 		case <-event_chan:
 			event_count = ev_queue.Get(event_list, 128)
@@ -221,6 +211,8 @@ func (this *module) handle_event(event_msg EventMsg) {
 		this.handle_agent_enter(event_msg)
 	case event.EVENT_TCP_CLOSED:
 		this.handle_agent_closed(event_msg)
+	case event.EVENT_MODULE_RPC:
+		this.handle_rpc(event_msg)
 	default:
 		slog.LogError("einx", "handle_event unknow event msg [%v]", event_msg.GetType())
 	}

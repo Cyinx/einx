@@ -15,13 +15,13 @@ type timerWheel struct {
 	prev_wheel *timerWheel
 }
 
-func newTimerWheel(ms_unit uint64, bit_size uint32, prev *timerWheel, next *timerWheel, now uint64) *timerWheel {
+func newTimerWheel(ms_unit uint64, bit_size uint32, now uint64) *timerWheel {
 	timer_wheel := &timerWheel{
 		index:      0,
 		bitSize:    bit_size,
 		msUnit:     ms_unit,
-		next_wheel: next,
-		prev_wheel: prev,
+		next_wheel: nil,
+		prev_wheel: nil,
 	}
 
 	if ms_unit == 1 {
@@ -74,21 +74,18 @@ func (this *timerWheel) execute(now uint64, count uint32) uint32 {
 	elapsedTime := uint64(now - this.baseTick)
 	loopTimes := uint64(1 + elapsedTime)
 
-	nowIndex := this.index
-	this.index += uint8(elapsedTime)
-	this.baseTick += elapsedTime
-
 	var run_count uint32 = 0
 	for ; run_count < count && loopTimes > 0; loopTimes-- {
-		timer_list := this.array[nowIndex]
+		timer_list := this.array[this.index]
 		c, b := timer_list.execute(now, count-run_count)
 		run_count = run_count + c
 		if b == false {
 			return run_count
 		}
-		nowIndex++
-		if nowIndex == 0 {
-			this.TurnWheel()
+		this.index++
+		this.baseTick += this.msUnit
+		if this.index == 0 {
+			this.next_wheel.TurnWheel()
 		}
 	}
 	return run_count
@@ -100,7 +97,6 @@ func (this *timerWheel) TurnWheel() {
 	}
 
 	timer_list := this.array[this.index]
-	this.index++
 	head_timer := timer_list.head
 	var next_timer *xtimer = nil
 	for head_timer != nil {
@@ -113,6 +109,9 @@ func (this *timerWheel) TurnWheel() {
 
 	timer_list.head = nil
 	timer_list.tail = nil
+
+	this.index++
+	this.baseTick += this.msUnit
 
 	if this.index == 0 && this.next_wheel != nil {
 		this.next_wheel.TurnWheel()
