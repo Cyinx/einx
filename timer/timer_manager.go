@@ -87,7 +87,9 @@ func (this *TimerManager) DeleteTimer(timerID uint64) {
 	this.timer_wheels[4].delete_timer(timerID>>24, uint32(timerID&0xffffff))
 }
 
-func (this *TimerManager) Execute(count uint32) {
+func (this *TimerManager) Execute(count uint32) int {
 	now := UnixTS()
-	this.timer_wheels[0].execute(now, count)
+	wheel := this.timer_wheels[0]
+	wheel.execute(now, count)
+	return wheel.nextWake()
 }

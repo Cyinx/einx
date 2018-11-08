@@ -91,6 +91,19 @@ func (this *timerWheel) execute(now uint64, count uint32) uint32 {
 	return run_count
 }
 
+func (this *timerWheel) nextWake() int {
+	wakeDelay := 0
+	wakeIndex := this.index
+	for ; wakeIndex != 0 && wakeDelay < 64; wakeIndex++ {
+		timer_list := this.array[wakeIndex]
+		if timer_list.head != nil {
+			break
+		}
+		wakeDelay++
+	}
+	return wakeDelay
+}
+
 func (this *timerWheel) TurnWheel() {
 	if this.prev_wheel == nil {
 		return

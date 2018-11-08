@@ -39,7 +39,6 @@ func (this *TcpServerMgr) GetType() ComponentType {
 }
 
 func (this *TcpServerMgr) Start() {
-
 	listener, err := net.Listen("tcp", this.addr)
 	if err != nil {
 		slog.LogError("tcp_server", "ListenTCP addr:[%s],Error:%s", this.addr, err.Error())
@@ -51,7 +50,9 @@ func (this *TcpServerMgr) Start() {
 
 func (this *TcpServerMgr) Close() {
 	if atomic.CompareAndSwapInt32(&this.close_flag, 0, 1) == true {
-		this.listener.Close()
+		if this.listener != nil {
+			this.listener.Close()
+		}
 	}
 }
 

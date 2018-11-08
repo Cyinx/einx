@@ -47,7 +47,7 @@ type ModuleWoker interface {
 }
 
 var (
-	MODULE_TIMER_INTERVAL time.Duration = 5
+	MODULE_TIMER_INTERVAL time.Duration = 1
 )
 
 type module struct {
@@ -85,7 +85,7 @@ func (this *module) Close() {
 }
 
 func (this *module) AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64 {
-	return this.timer_manager.AddTimer(delay, op, args)
+	return this.timer_manager.AddTimer(delay, op, args...)
 }
 
 func (this *module) RemoveTimer(timer_id uint64) {
@@ -160,7 +160,8 @@ func (this *module) Run(wait *sync.WaitGroup) {
 		close_flag  bool     = false
 		ev_queue             = this.ev_queue
 		event_chan           = ev_queue.GetChan()
-		ticker               = time.NewTicker(MODULE_TIMER_INTERVAL * time.Millisecond)
+		timer_tick           = time.NewTimer(MODULE_TIMER_INTERVAL * time.Millisecond)
+		tick_c               = timer_tick.C
 	)
 
 	event_list := make([]interface{}, 128)
@@ -178,9 +179,14 @@ func (this *module) Run(wait *sync.WaitGroup) {
 				this.handle_event(event_msg)
 				this.op_count++
 			}
-		case <-ticker.C:
+		case <-tick_c:
 		}
-		timer_manager.Execute(100)
+		nextWake := timer_manager.Execute(100)
+		if nextWake == 0 {
+			timer_tick.Reset(MODULE_TIMER_INTERVAL * time.Millisecond)
+		} else {
+			timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
+		}
 	}
 
 run_close:
