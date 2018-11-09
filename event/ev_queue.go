@@ -9,8 +9,9 @@ type EventChan chan bool
 type EventQueue struct {
 	ev_queue *queue.RWQueue
 
-	wait_count int32
-	ev_cond    EventChan
+	wait_count  int32
+	notifyCount int32
+	ev_cond     EventChan
 }
 
 func NewEventQueue() *EventQueue {
@@ -29,25 +30,25 @@ func (this *EventQueue) GetChan() EventChan {
 
 func (this *EventQueue) Push(event EventMsg) {
 	this.ev_queue.Push(event)
-	for {
-		if atomic.CompareAndSwapInt32(&this.wait_count, 0, 0) == true {
-			return
-		}
-		old_val := atomic.LoadInt32(&this.wait_count)
-
-		if atomic.CompareAndSwapInt32(&this.wait_count, old_val, old_val-1) == true {
-			break
-		}
+	atomic.AddInt32(&this.notifyCount, 1)
+	if atomic.LoadInt32(&this.wait_count) > 0 {
+		this.ev_cond <- true
 	}
-	this.ev_cond <- true
 }
 
 func (this *EventQueue) Get(event_list []interface{}, count uint32) uint32 {
-	read_count, left_count := this.ev_queue.Get(event_list, count)
-	if left_count == 0 {
-		atomic.AddInt32(&this.wait_count, 1)
-	} else {
-		this.ev_cond <- true
+	if atomic.LoadInt32(&this.notifyCount) < 0 {
+		return 0
 	}
+	read_count, _ := this.ev_queue.Get(event_list, count)
+	atomic.AddInt32(&this.notifyCount, int32(0-int32(read_count)))
 	return read_count
+}
+
+func (this *EventQueue) WaiterWake() {
+	atomic.AddInt32(&this.wait_count, 1)
+}
+
+func (this *EventQueue) NotifyCount() int {
+	return int(atomic.LoadInt32(&this.notifyCount))
 }

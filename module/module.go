@@ -47,7 +47,8 @@ type ModuleWoker interface {
 }
 
 var (
-	MODULE_TIMER_INTERVAL time.Duration = 1
+	MODULE_TIMER_INTERVAL = 1
+	MODULE_EVENT_LENGTH   = 128
 )
 
 type module struct {
@@ -160,11 +161,12 @@ func (this *module) Run(wait *sync.WaitGroup) {
 		close_flag  bool     = false
 		ev_queue             = this.ev_queue
 		event_chan           = ev_queue.GetChan()
-		timer_tick           = time.NewTimer(MODULE_TIMER_INTERVAL * time.Millisecond)
+		timer_tick           = time.NewTimer(time.Duration(MODULE_TIMER_INTERVAL) * time.Millisecond)
 		tick_c               = timer_tick.C
+		nextWake             = 0
 	)
 
-	event_list := make([]interface{}, 128)
+	event_list := make([]interface{}, MODULE_EVENT_LENGTH)
 	for {
 		select {
 		case close_flag = <-this.close_chan:
@@ -172,21 +174,26 @@ func (this *module) Run(wait *sync.WaitGroup) {
 				goto run_close
 			}
 		case <-event_chan:
-			event_count = ev_queue.Get(event_list, 128)
+			ev_queue.WaiterWake()
+		case <-tick_c:
+		}
+		for {
+			event_count = ev_queue.Get(event_list, uint32(MODULE_EVENT_LENGTH))
 			for event_index = 0; event_index < event_count; event_index++ {
 				event_msg = event_list[event_index].(EventMsg)
 				event_list[event_index] = nil
 				this.handle_event(event_msg)
 				this.op_count++
 			}
-		case <-tick_c:
+			nextWake = timer_manager.Execute(100)
+			if event_count <= 0 {
+				break
+			}
 		}
-		nextWake := timer_manager.Execute(100)
 		if nextWake == 0 {
-			timer_tick.Reset(MODULE_TIMER_INTERVAL * time.Millisecond)
-		} else {
-			timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
+			nextWake = MODULE_TIMER_INTERVAL
 		}
+		timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
 	}
 
 run_close:
