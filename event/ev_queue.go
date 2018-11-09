@@ -33,6 +33,7 @@ func (this *EventQueue) Push(event EventMsg) {
 	atomic.AddInt32(&this.notifyCount, 1)
 	if atomic.LoadInt32(&this.wait_count) > 0 {
 		this.ev_cond <- true
+		atomic.AddInt32(&this.wait_count, -1)
 	}
 }
 
