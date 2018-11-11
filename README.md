@@ -4,13 +4,16 @@ a framework in golang for game server or app server.
 
 a example server for einx (https://github.com/Cyinx/game_server_einx)
 
-## Getting Started
+### Getting Started
 ---------
-1. Install.
+1.Install.
 
    go get github.com/go-sql-driver/mysql
+
    go get github.com/yuin/gopher-lua
+
    go get github.com/Cyinx/einx
+
 
 2.hello world
 
