@@ -89,8 +89,8 @@ func (this *module) AddTimer(delay uint64, op TimerHandler, args ...interface{})
 	return this.timer_manager.AddTimer(delay, op, args...)
 }
 
-func (this *module) RemoveTimer(timer_id uint64) {
-	this.timer_manager.DeleteTimer(timer_id)
+func (this *module) RemoveTimer(timer_id uint64) bool {
+	return this.timer_manager.DeleteTimer(timer_id)
 }
 
 func (this *module) PostEvent(event_type EventType, agent Agent, cid ComponentID) {
@@ -186,12 +186,9 @@ func (this *module) Run(wait *sync.WaitGroup) {
 				this.op_count++
 			}
 			nextWake = timer_manager.Execute(100)
-			if event_count <= 0 {
+			if event_count <= 0 && nextWake > 0 {
 				break
 			}
-		}
-		if nextWake == 0 {
-			nextWake = MODULE_TIMER_INTERVAL
 		}
 		timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
 	}

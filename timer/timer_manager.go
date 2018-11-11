@@ -79,12 +79,11 @@ func (this *TimerManager) AddTimer(delay uint64, op TimerHandler, args ...interf
 	return xtimer.get_timer_id()
 }
 
-func (this *TimerManager) DeleteTimer(timerID uint64) {
+func (this *TimerManager) DeleteTimer(timerID uint64) bool {
 	if timerID == 0 {
-		return
+		return false
 	}
-
-	this.timer_wheels[4].delete_timer(timerID>>24, uint32(timerID&0xffffff))
+	return this.timer_wheels[4].delete_timer(timerID>>24, uint32(timerID&0xffffff))
 }
 
 func (this *TimerManager) Execute(count uint32) int {

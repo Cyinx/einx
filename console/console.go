@@ -15,7 +15,7 @@ func Run() {
 	for {
 		read_line, err := reader.ReadString('\n')
 		if err != nil {
-			continue
+			break
 		}
 
 		read_line = strings.TrimSuffix(read_line[:len(read_line)-1], "\r")

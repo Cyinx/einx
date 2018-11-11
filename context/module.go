@@ -10,5 +10,5 @@ type Module interface {
 	GetName() string
 	RpcCall(string, ...interface{})
 	AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64
-	RemoveTimer(timer_id uint64)
+	RemoveTimer(timer_id uint64) bool
 }

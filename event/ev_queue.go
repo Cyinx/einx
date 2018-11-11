@@ -31,9 +31,16 @@ func (this *EventQueue) GetChan() EventChan {
 func (this *EventQueue) Push(event EventMsg) {
 	this.ev_queue.Push(event)
 	atomic.AddInt32(&this.notifyCount, 1)
-	if atomic.LoadInt32(&this.wait_count) > 0 {
-		this.ev_cond <- true
-		atomic.AddInt32(&this.wait_count, -1)
+	for {
+		waitCount := atomic.LoadInt32(&this.wait_count)
+		if waitCount <= 0 {
+			return
+		}
+
+		if atomic.CompareAndSwapInt32(&this.wait_count, waitCount, waitCount-1) == true {
+			this.ev_cond <- true
+			return
+		}
 	}
 }
 
@@ -42,7 +49,7 @@ func (this *EventQueue) Get(event_list []interface{}, count uint32) uint32 {
 		return 0
 	}
 	read_count, _ := this.ev_queue.Get(event_list, count)
-	atomic.AddInt32(&this.notifyCount, int32(0-int32(read_count)))
+	atomic.AddInt32(&this.notifyCount, 0-int32(read_count))
 	return read_count
 }
 

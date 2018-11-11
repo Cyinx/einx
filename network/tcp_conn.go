@@ -2,7 +2,8 @@ package network
 
 import (
 	"github.com/Cyinx/einx/agent"
-	//"github.com/Cyinx/einx/slog"
+	"github.com/Cyinx/einx/queue"
+	//	"github.com/Cyinx/einx/slog"
 	"io"
 	"net"
 	"sync/atomic"
@@ -12,8 +13,7 @@ type TcpConn struct {
 	agent_id       AgentID
 	conn           net.Conn
 	close_flag     uint32
-	write_chan     chan *WriteWrapper
-	write_stop     chan struct{}
+	write_queue    *queue.CondQueue
 	handler        SessionHandler
 	last_ping_tick int64
 	remote_addr    string
@@ -25,8 +25,7 @@ func NewTcpConn(raw_conn net.Conn, h SessionHandler, agent_type int16) NetLinker
 	tcp_agent := &TcpConn{
 		conn:           raw_conn,
 		close_flag:     0,
-		write_chan:     make(chan *WriteWrapper, 256),
-		write_stop:     make(chan struct{}),
+		write_queue:    queue.NewCondQueue(),
 		agent_id:       agent.GenAgentID(),
 		handler:        h,
 		last_ping_tick: NowKeepAliveTick,
@@ -63,11 +62,7 @@ func (this *TcpConn) IsClosed() bool {
 }
 
 func (this *TcpConn) do_push_write(wrapper *WriteWrapper) bool {
-	select {
-	case <-this.write_stop:
-		return false
-	case this.write_chan <- wrapper:
-	}
+	this.write_queue.Push(wrapper)
 	return true
 }
 
@@ -108,7 +103,7 @@ func (this *TcpConn) RemoteAddr() net.Addr {
 
 func (this *TcpConn) Close() {
 	if atomic.CompareAndSwapUint32(&this.close_flag, 0, 1) == true {
-		this.write_chan <- nil
+		this.do_push_write(nil)
 		this.conn.Close()
 		this.conn = nil
 		this.Destroy()
@@ -156,20 +151,26 @@ wait_close:
 func (this *TcpConn) WriteGoroutine() {
 	write_buffer := make([]byte, 512)
 	tcp_conn := this.conn
+	write_queue := this.write_queue
 
-	for msg := range this.write_chan {
-		if msg == nil || this.IsClosed() == true {
-			goto wait_close
-		}
+	msg_list := make([]interface{}, 16)
 
-		write_buffer = write_buffer[0:]
-		if this.do_write(tcp_conn, msg, &write_buffer) == true {
-			continue
+	for {
+		c := write_queue.Get(msg_list, 16)
+		for i := uint32(0); i < c; i++ {
+			write_msg := msg_list[i].(*WriteWrapper)
+			if write_msg == nil || this.IsClosed() == true {
+				goto write_close
+			}
+			write_buffer = write_buffer[0:]
+			if this.do_write(tcp_conn, write_msg, &write_buffer) == false {
+				goto write_close
+			}
+			msg_list[i] = nil
 		}
 	}
-
-wait_close:
-	close(this.write_stop)
+write_close:
+	this.Close()
 }
 
 func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]byte) bool {
