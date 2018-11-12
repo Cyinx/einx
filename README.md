@@ -4,6 +4,11 @@ a framework in golang for game server or app server.
 
 a example server for einx (https://github.com/Cyinx/game_server_einx)
 
+### Mirror Repo.
+
+  gitee:https://gitee.com/Cyinx/einx
+
+
 ### Getting Started
 ---------
 1.Install.
@@ -163,7 +168,7 @@ func testTimer(ctx Context, args []interface{}) {
 
 
 
-## Licensing
+### Licensing
 ---------
 
 Apache License.
