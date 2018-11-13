@@ -18,6 +18,8 @@ const (
 	MSG_MAX_BODY_LENGTH = 8096
 )
 
+var bigEndian = binary.BigEndian
+
 // --------------------------------------------------------------------------------------------------------
 // |                                header              | body                          |
 // | type byte | body_length uint16 | packet_flag uint8 | msg_id uint32| msg_data []byte|
@@ -30,21 +32,13 @@ type PacketHeader struct {
 	PacketFlag uint8
 }
 
-func MsgHeaderLength() int {
-	return msg_header_length
-}
-
-func ReadBinary(r io.Reader, data interface{}) error {
-	return binary.Read(r, binary.LittleEndian, data)
-}
-
 func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, b *[]byte) (ProtoTypeID, []byte, error) {
 	if _, err := io.ReadFull(r, header_buffer); err != nil {
 		return 0, nil, err
 	}
 
 	msg_packet.MsgType = header_buffer[0]
-	msg_packet.BodyLength = uint16(header_buffer[1]) | (uint16(header_buffer[2]) << 8) //小端
+	msg_packet.BodyLength = bigEndian.Uint16(header_buffer[1:])
 	msg_packet.PacketFlag = header_buffer[3]
 
 	if msg_packet.MsgType == 'T' {
@@ -71,7 +65,7 @@ func ReadMsgPacket(r io.Reader, msg_packet *PacketHeader, header_buffer []byte, 
 	}
 
 	var msg_id ProtoTypeID = 0
-	msg_id = uint32(body[0]) | uint32(body[1])<<8 | uint32(body[2])<<16 | uint32(body[3])<<24 //小端
+	msg_id = bigEndian.Uint32(body)
 	msg_body := body[MSG_ID_LENGTH:]
 	return msg_id, msg_body, nil
 }
@@ -89,18 +83,12 @@ func MarshalMsgBinary(msg_type byte, msg_id ProtoTypeID, msg_buffer []byte, b *[
 	buffer := *b
 	//packet header
 	buffer[0] = msg_type
-	buffer[1] = byte(msg_body_length & 0xFF)
-	buffer[2] = byte(msg_body_length >> 8)
+	bigEndian.PutUint16(buffer[1:], uint16(msg_body_length))
 	buffer[3] = 0
-
 	//msg wrapper
-	buffer[4] = byte(msg_id)
-	buffer[5] = byte(msg_id >> 8)
-	buffer[6] = byte(msg_id >> 16)
-	buffer[7] = byte(msg_id >> 24)
+	bigEndian.PutUint32(buffer[4:], msg_id)
 
 	copy(buffer[MSG_HEADER_LENGTH+MSG_ID_LENGTH:], msg_buffer)
-
 	return true
 }
 

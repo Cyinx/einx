@@ -3,8 +3,8 @@ package module
 import (
 	"fmt"
 	"github.com/Cyinx/einx/slog"
+	"hash/crc32"
 	"sync"
-	"sync/atomic"
 )
 
 var worker_pools_map sync.Map
@@ -83,8 +83,7 @@ func (this *ModuleWorkerPool) RegisterHandler(type_id ProtoTypeID, f MsgHandler)
 }
 
 func (this *ModuleWorkerPool) RpcCall(name string, args ...interface{}) {
-	idx := this.balance_id % this.size
-	atomic.AddUint32(&this.balance_id, 1)
-	m := this.modules[idx]
+	crcValue := crc32.ChecksumIEEE([]byte(name))
+	m := this.modules[crcValue&this.size]
 	m.RpcCall(name, args...)
 }

@@ -104,14 +104,11 @@ func (this *TcpConn) RemoteAddr() net.Addr {
 func (this *TcpConn) Close() {
 	if atomic.CompareAndSwapUint32(&this.close_flag, 0, 1) == true {
 		this.do_push_write(nil)
-		this.conn.Close()
-		this.conn = nil
-		this.Destroy()
 	}
 }
 
 func (this *TcpConn) Destroy() {
-
+	this.conn.Close()
 }
 
 func (this *TcpConn) Run() {
@@ -137,7 +134,7 @@ func (this *TcpConn) Run() {
 			h.ServeRpc(this, msg_id, msg)
 			break
 		case 'T':
-			this.last_ping_tick = NowKeepAliveTick
+			atomic.StoreInt64(&this.last_ping_tick, NowKeepAliveTick)
 			break
 		default:
 			goto wait_close
@@ -159,7 +156,7 @@ func (this *TcpConn) WriteGoroutine() {
 		c := write_queue.Get(msg_list, 16)
 		for i := uint32(0); i < c; i++ {
 			write_msg := msg_list[i].(*WriteWrapper)
-			if write_msg == nil || this.IsClosed() == true {
+			if write_msg == nil {
 				goto write_close
 			}
 			write_buffer = write_buffer[0:]
@@ -171,6 +168,7 @@ func (this *TcpConn) WriteGoroutine() {
 	}
 write_close:
 	this.Close()
+	this.Destroy()
 }
 
 func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]byte) bool {
@@ -202,7 +200,7 @@ func (this *TcpConn) Ping() {
 }
 
 func (this *TcpConn) Pong() {
-	if NowKeepAliveTick-this.last_ping_tick >= PONGTIME {
+	if NowKeepAliveTick-atomic.LoadInt64(&this.last_ping_tick) >= PONGTIME {
 		this.conn.Close()
 	}
 }

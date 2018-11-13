@@ -1,6 +1,7 @@
 package module
 
 import (
+	"runtime"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -150,6 +151,7 @@ func (this *module) RecoverRun(wait *sync.WaitGroup) {
 }
 
 func (this *module) Run(wait *sync.WaitGroup) {
+	runtime.LockOSThread()
 	defer this.RecoverRun(wait)
 	wait.Add(1)
 	defer wait.Done()
