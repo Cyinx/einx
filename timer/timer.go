@@ -35,10 +35,16 @@ func (this *xtimer) get_timer_id() uint64 {
 type timerList struct {
 	head *xtimer
 	tail *xtimer
+
+	pool *timerPool
 }
 
-func newTimerList() *timerList {
-	timerlist := &timerList{}
+func newTimerList(p *timerPool) *timerList {
+	timerlist := &timerList{
+		head: nil,
+		tail: nil,
+		pool: p,
+	}
 	return timerlist
 }
 
@@ -87,6 +93,7 @@ func (this *timerList) delete_timer(seqID uint32) bool {
 		if curr_head.next == nil {
 			this.tail = prev_head
 		}
+		this.pool.Put(curr_head)
 		return true
 	}
 	return false
@@ -107,7 +114,7 @@ func (this *timerList) execute(now uint64, count uint32) (uint32, bool) {
 		running_timer.running = true
 		running_timer.handler(running_timer.args)
 		this.head = running_timer.next
-
+		this.pool.Put(running_timer)
 	}
 
 	if this.head == nil {

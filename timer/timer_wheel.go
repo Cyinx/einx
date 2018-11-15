@@ -15,7 +15,7 @@ type timerWheel struct {
 	prev_wheel *timerWheel
 }
 
-func newTimerWheel(ms_unit uint64, bit_size uint32, now uint64) *timerWheel {
+func newTimerWheel(ms_unit uint64, bit_size uint32, now uint64, p *timerPool) *timerWheel {
 	timer_wheel := &timerWheel{
 		index:      0,
 		bitSize:    bit_size,
@@ -31,7 +31,7 @@ func newTimerWheel(ms_unit uint64, bit_size uint32, now uint64) *timerWheel {
 	}
 
 	for i := 0; i < TIMERSLOTSCOUNT; i++ {
-		timer_wheel.array[i] = newTimerList()
+		timer_wheel.array[i] = newTimerList(p)
 	}
 
 	return timer_wheel

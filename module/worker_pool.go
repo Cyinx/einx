@@ -3,7 +3,6 @@ package module
 import (
 	"fmt"
 	"github.com/Cyinx/einx/slog"
-	"hash/crc32"
 	"sync"
 )
 
@@ -83,7 +82,14 @@ func (this *ModuleWorkerPool) RegisterHandler(type_id ProtoTypeID, f MsgHandler)
 }
 
 func (this *ModuleWorkerPool) RpcCall(name string, args ...interface{}) {
-	crcValue := crc32.ChecksumIEEE([]byte(name))
-	m := this.modules[crcValue&this.size]
+	var hashkey uint32 = 0
+	length := len(name)
+	if length > 0 {
+		hashkey += uint32(name[0])
+		hashkey += uint32(name[length-1])
+		hashkey += uint32(name[(length-1)/2])
+		hashkey += uint32(length)
+	}
+	m := this.modules[hashkey%this.size] //route the rpc to worker by a simple hash key
 	m.RpcCall(name, args...)
 }

@@ -1,12 +1,13 @@
 package network
 
 import (
+	//"github.com/Cyinx/einx/slog"
 	"github.com/Cyinx/einx/timer"
 	"sync"
 	"time"
 )
 
-const PINGTIME = 15 * 1000
+const PINGTIME = 5 * 1000
 const PONGTIME = PINGTIME * 2
 
 type TimerHandler = timer.TimerHandler

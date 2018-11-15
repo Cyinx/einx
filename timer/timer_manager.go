@@ -9,6 +9,7 @@ const TIMERWHEELCOUNT = 5
 type TimerManager struct {
 	seqIDIndex   uint32
 	timer_wheels [5]*timerWheel
+	pool         *timerPool
 }
 
 var beginTick uint64 = uint64(time.Now().UnixNano() / 1e6)
@@ -19,19 +20,20 @@ func UnixTS() uint64 {
 
 func NewTimerManager() *TimerManager {
 
-	timer_manager := &TimerManager{
+	m := &TimerManager{
 		seqIDIndex: 0,
+		pool:       newTimerPool(),
 	}
 
 	now := UnixTS()
 
-	timer_wheels := &timer_manager.timer_wheels
+	timer_wheels := &m.timer_wheels
 
-	timer_wheels[0] = newTimerWheel(1, 0, now)
-	timer_wheels[1] = newTimerWheel(0xff+1, 8, now)
-	timer_wheels[2] = newTimerWheel(0xffff+1, 16, now)
-	timer_wheels[3] = newTimerWheel(0xffffff+1, 24, now)
-	timer_wheels[4] = newTimerWheel(0xffffffff+1, 32, now)
+	timer_wheels[0] = newTimerWheel(1, 0, now, m.pool)
+	timer_wheels[1] = newTimerWheel(0xff+1, 8, now, m.pool)
+	timer_wheels[2] = newTimerWheel(0xffff+1, 16, now, m.pool)
+	timer_wheels[3] = newTimerWheel(0xffffff+1, 24, now, m.pool)
+	timer_wheels[4] = newTimerWheel(0xffffffff+1, 32, now, m.pool)
 
 	timer_wheels[0].next_wheel = timer_wheels[1]
 	timer_wheels[1].prev_wheel = timer_wheels[0]
@@ -42,7 +44,7 @@ func NewTimerManager() *TimerManager {
 	timer_wheels[3].next_wheel = timer_wheels[4]
 	timer_wheels[4].prev_wheel = timer_wheels[3]
 
-	return timer_manager
+	return m
 }
 
 func (this *TimerManager) GetSeqID() uint32 {
@@ -66,7 +68,7 @@ func (this *TimerManager) AddTimer(delay uint64, op TimerHandler, args ...interf
 		run_tick = run_tick & 0x000000ffffffffff
 	}
 
-	xtimer := newXTimer()
+	xtimer := this.pool.Get()
 	xtimer.args = args
 	xtimer.handler = op
 	xtimer.next = nil
