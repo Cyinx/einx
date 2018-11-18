@@ -1,9 +1,12 @@
 package slog
 
 import (
+	"fmt"
 	"os"
+	"path"
 	"runtime/debug"
 	"sync"
+	"time"
 )
 
 type FileWriter struct {
@@ -13,12 +16,14 @@ type FileWriter struct {
 }
 
 type LogWriter struct {
-	rec      chan *LogRecord
-	rot      chan bool
-	buf      []byte
-	filter   map[string]*FileWriter
-	end_wait sync.WaitGroup
-	path     string
+	rec       chan *LogRecord
+	init      chan string
+	init_path string
+	buf       []byte
+	filter    map[string]*FileWriter
+	end_wait  sync.WaitGroup
+	path      string
+	dayTimer  *time.Timer
 }
 
 func (this *LogWriter) LogWrite(rec *LogRecord) {
@@ -27,27 +32,21 @@ func (this *LogWriter) LogWrite(rec *LogRecord) {
 
 var _log_writer = &LogWriter{
 	rec:    make(chan *LogRecord, LogBufferLength),
-	rot:    make(chan bool),
+	init:   make(chan string),
 	filter: make(map[string]*FileWriter),
 	buf:    make([]byte, 2048),
 	path:   "",
 }
 
-func LogRunRecover(logwriter *LogWriter) {
-	if r := recover(); r != nil {
-		LogError("log_manager", "log worker recover[%v]", r)
-		debug.PrintStack()
-		go run()
-	}
-}
-
 func (this *LogWriter) writeFile(log *LogRecord) {
 	file_writer, ok := _log_writer.filter[log.Name]
 	if ok == false {
-		fd, err := os.OpenFile(this.path+log.Name+".log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
-		if err == nil {
-			file_writer = &FileWriter{log.Name, fd}
+		path := path.Join(this.path, log.Name+".log")
+		fd, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+		if err != nil {
+			return
 		}
+		file_writer = &FileWriter{log.Name, fd}
 		_log_writer.filter[log.Name] = file_writer
 	}
 
@@ -58,60 +57,100 @@ func (this *LogWriter) writeStd(log *LogRecord) {
 	os.Stdout.Write(_log_writer.buf)
 }
 
-func (this *LogWriter) SetPath(path string) {
-	this.path = path
-	fi, err := os.Stat(path)
-	is_exist := false
-	if err != nil {
-		is_exist = os.IsExist(err)
+func (this *LogWriter) InitPath(p string) {
+	this.init <- p
+}
+
+func (this *LogWriter) MakePath() {
+	ok := false
+	if file, err := os.Stat(this.path); err != nil {
+		ok = os.IsExist(err)
 	} else {
-		is_exist = fi.IsDir()
+		ok = file.IsDir()
 	}
-	if is_exist == false {
+
+	if ok == false {
 		os.MkdirAll(this.path, 0x777)
-		if this.path[len(this.path)-1] != '/' && this.path[len(this.path)-1] != '\\' {
-			this.path = this.path + "/"
-		}
 	}
 }
 
-func InitLogWriter() {
-	go run()
+func (this *LogWriter) MakeLogTimePath() {
+	now := time.Now()
+	dirName := fmt.Sprintf("%d-%02d-%02d",
+		now.Year(),
+		now.Month(),
+		now.Day())
+
+	this.path = path.Join(this.init_path, dirName)
+
+	this.MakePath()
+	zero_time := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	delayTime := 24*60*60 - (now.Unix() - zero_time.Unix())
+
+	if this.dayTimer == nil {
+		this.dayTimer = time.NewTimer(time.Duration(delayTime) * time.Second)
+	} else {
+		this.dayTimer.Reset(time.Duration(delayTime) * time.Second)
+	}
+	this.syncLog()
+	this.filter = make(map[string]*FileWriter)
 }
 
-func run() {
-	defer LogRunRecover(_log_writer)
-	_log_writer.end_wait.Add(1)
-	defer _log_writer.end_wait.Done()
+func (this *LogWriter) Run() {
+	defer this.Recover()
+	this.end_wait.Add(1)
+	defer this.end_wait.Done()
+	this.init_path = <-this.init
+	this.MakeLogTimePath()
+	var logRecord *LogRecord
+	var ok bool
 	for {
-		log, ok := <-_log_writer.rec
-		if ok == false || log == nil {
+		select {
+		case logRecord, ok = <-this.rec:
+		case <-this.dayTimer.C:
+			this.MakeLogTimePath()
+			continue
+		}
+		if ok == false || logRecord == nil {
 			goto wait_close
 		}
-
-		_log_writer.buf = _log_writer.buf[:0]
+		this.buf = this.buf[:0]
 		//_log_writer.buf = append(_log_writer.buf, "\x1b[031m"...)
-		formatHeader(&_log_writer.buf, log.Level, log.Created)
-		_log_writer.buf = append(_log_writer.buf, log.Message...)
+		formatHeader(&this.buf, logRecord.Level, logRecord.Created)
+		this.buf = append(this.buf, logRecord.Message...)
 		//_log_writer.buf = append(_log_writer.buf, "\x1b[0m"...)
-		_log_writer.buf = append(_log_writer.buf, "\r\n"...)
+		this.buf = append(this.buf, "\r\n"...)
 
-		if log.logfile == true {
-			_log_writer.writeFile(log)
+		if logRecord.logfile == true {
+			this.writeFile(logRecord)
 		}
 
-		_log_writer.writeStd(log)
+		if logRecord.Level == INFO || DebugLevel() == DEBUG {
+			this.writeStd(logRecord)
+		}
 
+		logRecord.Reset()
+		log_pool.Put(logRecord)
 	}
 wait_close:
-	_writer_close()
+	this.DoClose()
 }
 
-func _writer_close() {
-	for _, filter := range _log_writer.filter {
-		if filter != nil && filter.file != nil {
-			filter.file.Sync()
-			filter.file.Close()
-		}
+func (this *LogWriter) Recover() {
+	if r := recover(); r != nil {
+		LogError("log_manager", "log worker recover[%v]", r)
+		debug.PrintStack()
+		go this.Run()
 	}
+}
+
+func (this *LogWriter) syncLog() {
+	for _, filter := range this.filter {
+		filter.file.Sync()
+		filter.file.Close()
+	}
+}
+
+func (this *LogWriter) DoClose() {
+	this.syncLog()
 }
