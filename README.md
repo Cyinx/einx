@@ -24,10 +24,10 @@ a example server for einx (https://github.com/Cyinx/game_server_einx)
 
 ### Brief
 
-* Agent(https://github.com/Cyinx/einx/tree/master/agent) - Basic Interface
-* Module(https://github.com/Cyinx/einx/tree/master/module) - Service worker
-* Network(https://github.com/Cyinx/einx/tree/master/network) - Network Unit for Module.Implement of Component.
-* Timer(https://github.com/Cyinx/einx/tree/master/timer) - Timer wheel.
+* [Agent](https://github.com/Cyinx/einx/tree/master/agent) - Basic Interface
+* [Module](https://github.com/Cyinx/einx/tree/master/module) - Service worker
+* [Network](https://github.com/Cyinx/einx/tree/master/network) - Network Unit for Module.Implement of Component.
+* [Timer](https://github.com/Cyinx/einx/tree/master/timer) - Timer wheel.
 
 * [Guide Document](https://github.com/Cyinx/einx/wiki)
 * [example for reference.](https://github.com/Cyinx/game_server_einx)
