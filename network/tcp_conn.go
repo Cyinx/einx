@@ -6,6 +6,7 @@ import (
 	//	"github.com/Cyinx/einx/slog"
 	"io"
 	"net"
+	"sync"
 	"sync/atomic"
 )
 
@@ -66,16 +67,18 @@ func (this *TcpConn) do_push_write(wrapper *WriteWrapper) bool {
 	return true
 }
 
+var write_pool *sync.Pool = &sync.Pool{New: func() interface{} { return new(WriteWrapper) }}
+
 func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, b []byte) bool {
 	if this.IsClosed() == true {
 		return false
 	}
 
-	wrapper := &WriteWrapper{
-		msg_type: 'P',
-		msg_id:   msg_id,
-		buffer:   b,
-	}
+	wrapper := write_pool.Get().(*WriteWrapper)
+	wrapper.msg_type = 'P'
+	wrapper.msg_id = msg_id
+	wrapper.buffer = b
+
 	return this.do_push_write(wrapper)
 }
 
@@ -84,11 +87,10 @@ func (this *TcpConn) RpcCall(msg_id ProtoTypeID, b []byte) bool {
 		return false
 	}
 
-	wrapper := &WriteWrapper{
-		msg_type: 'R',
-		msg_id:   msg_id,
-		buffer:   b,
-	}
+	wrapper := write_pool.Get().(*WriteWrapper)
+	wrapper.msg_type = 'P'
+	wrapper.msg_id = msg_id
+	wrapper.buffer = b
 
 	return this.do_push_write(wrapper)
 }
@@ -164,6 +166,8 @@ func (this *TcpConn) WriteGoroutine() {
 				goto write_close
 			}
 			msg_list[i] = nil
+			write_msg.reset()
+			write_pool.Put(write_msg)
 		}
 	}
 write_close:

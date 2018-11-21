@@ -54,6 +54,12 @@ type WriteWrapper struct {
 	buffer   []byte
 }
 
+func (w *WriteWrapper) reset() {
+	w.msg_type = 0
+	w.msg_id = 0
+	w.buffer = nil
+}
+
 const (
 	COMPONENT_TYPE_TCP_SERVER = component.COMPONENT_TYPE_TCP_SERVER
 	COMPONENT_TYPE_TCP_CLIENT = component.COMPONENT_TYPE_TCP_CLIENT
