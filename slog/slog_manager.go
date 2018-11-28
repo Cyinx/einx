@@ -20,6 +20,10 @@ var (
 	levelStrings = [...]string{"DEBG", "INFO", "WARN", "EROR"}
 )
 
+func init() {
+	go _log_writer.Run()
+}
+
 const LogBufferLength = 65535
 
 func (l Level) String() string {
@@ -45,10 +49,6 @@ func (this *LogRecord) Reset() {
 }
 
 var LOG_LEVEL Level = DEBUG
-
-func init() {
-	go _log_writer.Run()
-}
 
 func post_log(debuglv Level, is_log_file bool, name string, format string, args ...interface{}) {
 	if LOG_LEVEL > debuglv {
@@ -103,4 +103,8 @@ func SetLogPath(path string) {
 func Close() {
 	_log_writer.LogWrite(nil)
 	_log_writer.end_wait.Wait()
+}
+
+func Run() {
+	SetLogPath("log")
 }

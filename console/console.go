@@ -5,13 +5,16 @@ import (
 	"github.com/Cyinx/einx/module"
 	"github.com/Cyinx/einx/slog"
 	"os"
-	//"runtime"
 	"strings"
 )
 
 var reader = bufio.NewReader(os.Stdin)
 
 func Run() {
+	go doRun()
+}
+
+func doRun() {
 	for {
 		read_line, err := reader.ReadString('\n')
 		if err != nil {

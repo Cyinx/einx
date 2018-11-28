@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 	"time"
+	"sync/atomic"
 )
 
 type FileWriter struct {
@@ -19,6 +20,7 @@ type LogWriter struct {
 	rec       chan *LogRecord
 	init      chan string
 	init_path string
+	b_init 	  int32
 	buf       []byte
 	filter    map[string]*FileWriter
 	end_wait  sync.WaitGroup
@@ -36,6 +38,7 @@ var _log_writer = &LogWriter{
 	filter: make(map[string]*FileWriter),
 	buf:    make([]byte, 2048),
 	path:   "",
+	b_init : 0,
 }
 
 func (this *LogWriter) writeFile(log *LogRecord) {
@@ -58,7 +61,9 @@ func (this *LogWriter) writeStd(log *LogRecord) {
 }
 
 func (this *LogWriter) InitPath(p string) {
-	this.init <- p
+	if atomic.CompareAndSwapInt32(&this.b_init,0,1) == true {
+		this.init <- p
+	}
 }
 
 func (this *LogWriter) MakePath() {
