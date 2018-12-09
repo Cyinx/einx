@@ -44,6 +44,7 @@ func NewModule(name string) Module {
 		data_msg_pool:   &sync.Pool{New: func() interface{} { return new(DataEventMsg) }},
 		event_msg_pool:  &sync.Pool{New: func() interface{} { return new(SessionEventMsg) }},
 		close_chan:      make(chan bool),
+		event_list:      make([]interface{}, MODULE_EVENT_LENGTH),
 	}
 	m.context = &ModuleContext{m: m}
 	return m

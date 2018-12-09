@@ -47,7 +47,11 @@ func (this *TcpClientMgr) connect(addr string, user_type int16) {
 	raw_conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		slog.LogWarning("tcp_client", "tcp connect failed %v", err)
-		this.module.PostEvent(event.EVENT_COMPONENT_ERROR, nil, this.component_id)
+		e := &event.ComponentEventMsg{}
+		e.MsgType = event.EVENT_COMPONENT_ERROR
+		e.Sender = this
+		e.Attach = err
+		this.module.PushEventMsg(e)
 		return
 	}
 

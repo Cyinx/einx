@@ -68,6 +68,9 @@ type module struct {
 	op_count        int64
 	close_chan      chan bool
 	context         *ModuleContext
+	event_list      []interface{}
+	event_count     uint32
+	event_index     uint32
 }
 
 func (this *module) GetID() AgentID {
@@ -144,8 +147,8 @@ func (this *module) RegisterRpcHandler(rpc_name string, handler RpcHandler) {
 
 func (this *module) RecoverRun(wait *sync.WaitGroup) {
 	if r := recover(); r != nil {
-		slog.LogError("module_recovery", "recover :%v", r)
-		debug.PrintStack()
+		slog.LogError("module_recovery", "recover error :%v", r)
+		slog.LogError("module_recovery", "%s", string(debug.Stack()))
 		go this.Run(wait) // continue to run
 	}
 }
@@ -157,19 +160,35 @@ func (this *module) Run(wait *sync.WaitGroup) {
 	defer wait.Done()
 	timer_manager := this.timer_manager
 	var (
-		event_msg   EventMsg = nil
-		event_count uint32   = 0
-		event_index uint32   = 0
-		close_flag  bool     = false
-		ev_queue             = this.ev_queue
-		event_chan           = ev_queue.GetChan()
-		timer_tick           = time.NewTimer(time.Duration(MODULE_TIMER_INTERVAL) * time.Millisecond)
-		tick_c               = timer_tick.C
-		nextWake             = 0
+		event_msg  EventMsg = nil
+		close_flag bool     = false
+		ev_queue            = this.ev_queue
+		event_chan          = ev_queue.GetChan()
+		timer_tick          = time.NewTimer(time.Duration(MODULE_TIMER_INTERVAL) * time.Millisecond)
+		tick_c              = timer_tick.C
+		nextWake            = 0
+		event_list          = this.event_list
 	)
 
-	event_list := make([]interface{}, MODULE_EVENT_LENGTH)
 	for {
+		for {
+			if this.event_index >= this.event_count {
+				this.event_count = ev_queue.Get(event_list, uint32(MODULE_EVENT_LENGTH))
+				this.event_index = 0
+			}
+			for this.event_index < this.event_count {
+				event_msg = event_list[this.event_index].(EventMsg)
+				event_list[this.event_index] = nil
+				this.event_index++
+				this.handle_event(event_msg)
+				this.op_count++
+			}
+			nextWake = timer_manager.Execute(100)
+			if this.event_count <= 0 && nextWake > 0 {
+				break
+			}
+		}
+		timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
 		select {
 		case close_flag = <-this.close_chan:
 			if close_flag == true {
@@ -179,20 +198,6 @@ func (this *module) Run(wait *sync.WaitGroup) {
 			ev_queue.WaiterWake()
 		case <-tick_c:
 		}
-		for {
-			event_count = ev_queue.Get(event_list, uint32(MODULE_EVENT_LENGTH))
-			for event_index = 0; event_index < event_count; event_index++ {
-				event_msg = event_list[event_index].(EventMsg)
-				event_list[event_index] = nil
-				this.handle_event(event_msg)
-				this.op_count++
-			}
-			nextWake = timer_manager.Execute(100)
-			if event_count <= 0 && nextWake > 0 {
-				break
-			}
-		}
-		timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
 	}
 
 run_close:
