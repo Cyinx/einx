@@ -16,7 +16,9 @@ var _einx_default = &einx{
 }
 
 func Run() {
-	go console.Run()
+	slog.Run()
+	console.Run()
+	network.Run()
 	module.Start()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill)

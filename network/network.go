@@ -84,3 +84,7 @@ type SessionHandler interface {
 	ServeHandler(Agent, ProtoTypeID, []byte)
 	ServeRpc(Agent, ProtoTypeID, []byte)
 }
+
+func Run() {
+	go OnKeepAliveUpdate()
+}

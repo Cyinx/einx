@@ -7,8 +7,12 @@ import (
 	"time"
 )
 
-const PINGTIME = 5 * 1000
-const PONGTIME = PINGTIME * 2
+var (
+	EnableKeepAlive       = true
+	PINGTIME        int64 = 5 * 1000 //Millisecond
+	PONGTIME        int64 = PINGTIME * 2
+	CHECKTIME       int64 = 64 //Millisecond
+)
 
 type TimerHandler = timer.TimerHandler
 type TimerManager = timer.TimerManager
@@ -27,20 +31,24 @@ var alive_manager = &aliveManager{
 
 var NowKeepAliveTick int64 = 0
 
-func init() {
-	go OnUpdate()
+func SetKeepAlive(open bool, pingTime int64) {
+	EnableKeepAlive = open
+	PINGTIME = pingTime
 }
 
 func OnPing(args []interface{}) {
 	linker := args[0].(Linker)
 	linker.Ping()
-	timer_id := alive_manager.timer_manager.AddTimer(PINGTIME, OnPing, linker)
+	timer_id := alive_manager.timer_manager.AddTimer(uint64(PINGTIME), OnPing, linker)
 	alive_manager.linkers[linker] = timer_id
 }
 
 func AddPing(linker Linker) {
+	if EnableKeepAlive == false {
+		return
+	}
 	alive_manager.locker.Lock()
-	timer_id := alive_manager.timer_manager.AddTimer(PINGTIME, OnPing, linker)
+	timer_id := alive_manager.timer_manager.AddTimer(uint64(PINGTIME), OnPing, linker)
 	alive_manager.linkers[linker] = timer_id
 	alive_manager.locker.Unlock()
 }
@@ -57,13 +65,16 @@ func RemovePing(linker Linker) {
 func OnPong(args []interface{}) {
 	linker := args[0].(Linker)
 	linker.Pong()
-	timer_id := alive_manager.timer_manager.AddTimer(PONGTIME, OnPong, linker)
+	timer_id := alive_manager.timer_manager.AddTimer(uint64(PONGTIME), OnPong, linker)
 	alive_manager.linkers[linker] = timer_id
 }
 
 func AddPong(linker Linker) {
+	if EnableKeepAlive == false {
+		return
+	}
 	alive_manager.locker.Lock()
-	timer_id := alive_manager.timer_manager.AddTimer(PONGTIME, OnPong, linker)
+	timer_id := alive_manager.timer_manager.AddTimer(uint64(PONGTIME), OnPong, linker)
 	alive_manager.linkers[linker] = timer_id
 	alive_manager.locker.Unlock()
 }
@@ -77,8 +88,8 @@ func RemovePong(linker Linker) {
 	alive_manager.locker.Unlock()
 }
 
-func OnUpdate() {
-	var ticker = time.NewTicker(15 * time.Millisecond)
+func OnKeepAliveUpdate() {
+	var ticker = time.NewTicker(time.Duration(CHECKTIME) * time.Millisecond)
 	timer_manager := alive_manager.timer_manager
 	locker := alive_manager.locker
 	for {
