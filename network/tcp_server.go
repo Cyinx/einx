@@ -11,22 +11,38 @@ import (
 const TCP_ACCEPT_SLEEP = 150
 
 type TcpServerMgr struct {
+	name          string
 	listener      net.Listener
 	component_id  ComponentID
 	module        EventReceiver
 	agent_handler SessionHandler
 	addr          string
 	close_flag    int32
+	option        TransportOption
 }
 
-func NewTcpServerMgr(addr string, m EventReceiver, h SessionHandler) Component {
+func NewTcpServerMgr(opts ...Option) Component {
 	tcp_server := &TcpServerMgr{
-		component_id:  GenComponentID(),
-		addr:          addr,
-		module:        m,
-		agent_handler: h,
-		close_flag:    0,
+		component_id: GenComponentID(),
+		close_flag:   0,
+		option: TransportOption{
+			msg_max_length: MSG_MAX_BODY_LENGTH,
+			msg_max_count:  MSG_DEFAULT_COUNT,
+		},
 	}
+
+	for _, opt := range opts {
+		opt(tcp_server)
+	}
+
+	if tcp_server.agent_handler == nil {
+		panic("option agent handler is nil")
+	}
+
+	if tcp_server.module == nil {
+		panic("option agent handler is nil")
+	}
+
 	return tcp_server
 }
 
@@ -77,14 +93,14 @@ func (this *TcpServerMgr) do_tcp_accept() {
 			continue
 		}
 
-		tcp_agent := NewTcpConn(raw_conn, h, AgentType_TCP_InComming)
-		m.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent.(Agent), this.component_id)
+		tcp_agent := newTcpConn(raw_conn, h, AgentType_TCP_InComming, &this.option)
+		m.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
 
 		go func() {
-			AddPong(tcp_agent.(*TcpConn))
+			AddPong(tcp_agent)
 			tcp_agent.Run()
-			RemovePong(tcp_agent.(*TcpConn))
-			m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent.(Agent), this.component_id)
+			RemovePong(tcp_agent)
+			m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 		}()
 	}
 }

@@ -10,6 +10,7 @@ import (
 //var module_map map[string]Module = make(map[string]Module)
 var module_map sync.Map
 var wait_close sync.WaitGroup
+var PerfomancePrint bool = false
 
 func GenModuleID() AgentID {
 	return agent.GenAgentID()

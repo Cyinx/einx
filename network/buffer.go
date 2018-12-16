@@ -4,6 +4,6 @@ import (
 	"sync"
 )
 
-const BUFFER_BASE_SIZE = 128
+const BUFFER_BASE_SIZE = 1024
 
-var buffer_pool *sync.Pool = &sync.Pool{New: func() interface{} { return make([]byte, 0, BUFFER_BASE_SIZE) }}
+var buffer_pool *sync.Pool = &sync.Pool{New: func() interface{} { return make([]byte, BUFFER_BASE_SIZE) }}

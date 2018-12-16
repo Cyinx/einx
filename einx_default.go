@@ -15,6 +15,12 @@ var _einx_default = &einx{
 	close_chan: make(chan bool),
 }
 
+func Init(opts ...Option) {
+	for _, opt := range opts {
+		opt()
+	}
+}
+
 func Run() {
 	slog.Run()
 	console.Run()
@@ -42,7 +48,10 @@ func NewLuaStae() *lua_state.LuaRuntime {
 
 func AddTcpServerMgr(m module.Module, addr string, mgr interface{}) {
 	m_eventer := m.(event.EventReceiver)
-	tcp_server := network.NewTcpServerMgr(addr, m_eventer, mgr.(SessionHandler))
+	tcp_server := network.NewTcpServerMgr(
+		NetworkOption.ListenAddr(addr),
+		network.Module(m_eventer),
+		NetworkOption.ServeHandler(mgr.(SessionHandler)))
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_server
@@ -52,7 +61,11 @@ func AddTcpServerMgr(m module.Module, addr string, mgr interface{}) {
 
 func StartTcpClientMgr(m module.Module, name string, mgr interface{}) {
 	m_eventer := m.(event.EventReceiver)
-	tcp_client := network.NewTcpClientMgr(name, m_eventer, mgr.(SessionHandler))
+	tcp_client := network.NewTcpClientMgr(
+		NetworkOption.Name(name),
+		network.Module(m_eventer),
+		NetworkOption.ServeHandler(mgr.(SessionHandler)))
+
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_client

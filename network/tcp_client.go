@@ -11,15 +11,30 @@ type TcpClientMgr struct {
 	component_id  ComponentID
 	module        EventReceiver
 	agent_handler SessionHandler
+	option        TransportOption
 }
 
-func NewTcpClientMgr(name string, m EventReceiver, h SessionHandler) Component {
+func NewTcpClientMgr(opts ...Option) Component {
 	tcp_client := &TcpClientMgr{
-		name:          name,
-		module:        m,
-		component_id:  GenComponentID(),
-		agent_handler: h,
+		component_id: GenComponentID(),
+		option: TransportOption{
+			msg_max_length: MSG_MAX_BODY_LENGTH,
+			msg_max_count:  MSG_DEFAULT_COUNT,
+		},
 	}
+
+	for _, opt := range opts {
+		opt(tcp_client)
+	}
+
+	if tcp_client.agent_handler == nil {
+		panic("option agent handler is nil")
+	}
+
+	if tcp_client.module == nil {
+		panic("option agent handler is nil")
+	}
+
 	return tcp_client
 }
 
@@ -58,14 +73,14 @@ func (this *TcpClientMgr) connect(addr string, user_type int16) {
 	m := this.module
 	h := this.agent_handler
 
-	tcp_linker := NewTcpConn(raw_conn, h, AgentType_TCP_OutGoing)
-	tcp_linker.SetUserType(user_type)
-	m.PostEvent(event.EVENT_TCP_CONNECTED, tcp_linker.(Agent), this.component_id)
+	tcp_agent := newTcpConn(raw_conn, h, AgentType_TCP_OutGoing, &this.option)
+	tcp_agent.SetUserType(user_type)
+	m.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
 
 	go func() {
-		AddPing(tcp_linker.(*TcpConn))
-		tcp_linker.Run()
-		RemovePing(tcp_linker.(*TcpConn))
-		m.PostEvent(event.EVENT_TCP_CLOSED, tcp_linker.(Agent), this.component_id)
+		AddPing(tcp_agent)
+		tcp_agent.Run()
+		RemovePing(tcp_agent)
+		m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 	}()
 }

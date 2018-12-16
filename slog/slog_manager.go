@@ -21,7 +21,7 @@ var (
 )
 
 func init() {
-	go _log_writer.Run()
+	go _log_writer.Run(true)
 }
 
 const LogBufferLength = 65535

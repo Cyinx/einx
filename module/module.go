@@ -32,7 +32,6 @@ type SessionMgr = network.SessionMgr
 type Module = context.Module
 type Context = context.Context
 type ProtoTypeID = uint32
-type DispatchHandler func(event_msg EventMsg)
 type MsgHandler func(Context, interface{})
 type RpcHandler func(Context, []interface{})
 
@@ -71,6 +70,7 @@ type module struct {
 	event_list      []interface{}
 	event_count     uint32
 	event_index     uint32
+	begin_time      int64
 }
 
 func (this *module) GetID() AgentID {
@@ -145,7 +145,7 @@ func (this *module) RegisterRpcHandler(rpc_name string, handler RpcHandler) {
 	this.rpc_handler_map[rpc_name] = handler
 }
 
-func (this *module) RecoverRun(wait *sync.WaitGroup) {
+func (this *module) recover(wait *sync.WaitGroup) {
 	if r := recover(); r != nil {
 		slog.LogError("module_recovery", "recover error :%v", r)
 		slog.LogError("module_recovery", "%s", string(debug.Stack()))
@@ -155,9 +155,10 @@ func (this *module) RecoverRun(wait *sync.WaitGroup) {
 
 func (this *module) Run(wait *sync.WaitGroup) {
 	runtime.LockOSThread()
-	defer this.RecoverRun(wait)
+	defer this.recover(wait)
 	wait.Add(1)
 	defer wait.Done()
+	this.begin_time = time.Now().UnixNano() / 1e9
 	timer_manager := this.timer_manager
 	var (
 		event_msg  EventMsg = nil
@@ -210,6 +211,10 @@ func (this *module) do_close(wait *sync.WaitGroup) {
 	}
 	for _, a := range this.agent_map {
 		a.Close()
+	}
+	if PerfomancePrint == true {
+		elasp_time := time.Now().UnixNano()/1e9 - this.begin_time
+		slog.LogError("perfomance", "module perfomance [%s] %d %d %d", this.name, elasp_time, this.op_count, this.op_count/elasp_time)
 	}
 	//slog.LogWarning("module", "module [%s] closed!", this.name)
 }

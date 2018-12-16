@@ -6,8 +6,8 @@ import (
 	"path"
 	"runtime/debug"
 	"sync"
-	"time"
 	"sync/atomic"
+	"time"
 )
 
 type FileWriter struct {
@@ -20,7 +20,7 @@ type LogWriter struct {
 	rec       chan *LogRecord
 	init      chan string
 	init_path string
-	b_init 	  int32
+	b_init    int32
 	buf       []byte
 	filter    map[string]*FileWriter
 	end_wait  sync.WaitGroup
@@ -38,7 +38,7 @@ var _log_writer = &LogWriter{
 	filter: make(map[string]*FileWriter),
 	buf:    make([]byte, 2048),
 	path:   "",
-	b_init : 0,
+	b_init: 0,
 }
 
 func (this *LogWriter) writeFile(log *LogRecord) {
@@ -61,7 +61,7 @@ func (this *LogWriter) writeStd(log *LogRecord) {
 }
 
 func (this *LogWriter) InitPath(p string) {
-	if atomic.CompareAndSwapInt32(&this.b_init,0,1) == true {
+	if atomic.CompareAndSwapInt32(&this.b_init, 0, 1) == true {
 		this.init <- p
 	}
 }
@@ -101,12 +101,18 @@ func (this *LogWriter) MakeLogTimePath() {
 	this.filter = make(map[string]*FileWriter)
 }
 
-func (this *LogWriter) Run() {
+func (this *LogWriter) Run(b bool) {
 	defer this.Recover()
 	this.end_wait.Add(1)
 	defer this.end_wait.Done()
-	this.init_path = <-this.init
+	if b == true {
+		this.init_path = <-this.init
+	}
 	this.MakeLogTimePath()
+	this.doRun()
+}
+
+func (this *LogWriter) doRun() {
 	var logRecord *LogRecord
 	var ok bool
 	for {
@@ -145,7 +151,7 @@ func (this *LogWriter) Recover() {
 	if r := recover(); r != nil {
 		LogError("log_manager", "log worker recover[%v]", r)
 		debug.PrintStack()
-		go this.Run()
+		go this.Run(false)
 	}
 }
 

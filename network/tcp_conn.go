@@ -3,9 +3,9 @@ package network
 import (
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/queue"
-	//	"github.com/Cyinx/einx/slog"
-	"io"
+	"github.com/Cyinx/einx/slog"
 	"net"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 )
@@ -15,24 +15,34 @@ type TcpConn struct {
 	conn           net.Conn
 	close_flag     uint32
 	write_queue    *queue.CondQueue
-	handler        SessionHandler
+	servehander    SessionHandler
 	last_ping_tick int64
 	remote_addr    string
 	agent_type     int16
 	user_type      int16
+
+	recv_buf        []byte
+	write_buf       []byte
+	msg_packet      transPacket
+	recv_check_time int64
+	option          TransportOption
 }
 
-func NewTcpConn(raw_conn net.Conn, h SessionHandler, agent_type int16) NetLinker {
+func newTcpConn(raw_conn net.Conn, h SessionHandler, agent_type int16, opt *TransportOption) *TcpConn {
 	tcp_agent := &TcpConn{
 		conn:           raw_conn,
 		close_flag:     0,
 		write_queue:    queue.NewCondQueue(),
 		agent_id:       agent.GenAgentID(),
-		handler:        h,
-		last_ping_tick: NowKeepAliveTick,
+		servehander:    h,
+		last_ping_tick: GetNowTick(),
 		remote_addr:    raw_conn.RemoteAddr().(*net.TCPAddr).String(),
 		agent_type:     agent_type,
 		user_type:      0,
+
+		recv_buf:  buffer_pool.Get().([]byte),
+		write_buf: buffer_pool.Get().([]byte),
+		option:    *opt,
 	}
 	return tcp_agent
 }
@@ -114,93 +124,29 @@ func (this *TcpConn) Destroy() {
 }
 
 func (this *TcpConn) Run() {
-	go this.WriteGoroutine()
+	defer this.recover()
 
-	tcp_conn := this.conn
-	var packet PacketHeader
-	header_buffer := make([]byte, MSG_HEADER_LENGTH)
-	body_buffer := make([]byte, MSG_HEADER_LENGTH)
-	h := this.handler
+	go func() {
+		defer this.recover()
+		if this.Write() == false {
+			this.Close()
+			this.Destroy()
+		}
+	}()
 
-	for {
-		header_buffer = header_buffer[0:]
-		msg_id, msg, err := ReadMsgPacket(tcp_conn, &packet, header_buffer, &body_buffer)
-		if err != nil {
-			goto wait_close
-		}
-		switch packet.MsgType {
-		case 'P':
-			h.ServeHandler(this, msg_id, msg)
-			break
-		case 'R':
-			h.ServeRpc(this, msg_id, msg)
-			break
-		case 'T':
-			this.OnPing()
-			break
-		default:
-			goto wait_close
-		}
+	if this.Recv() == false {
+		this.Close()
 	}
-
-wait_close:
-	this.Close()
 }
 
 func (this *TcpConn) OnPing() {
-	if this.last_ping_tick != NowKeepAliveTick {
-		atomic.StoreInt64(&this.last_ping_tick, NowKeepAliveTick)
-		if this.agent_type == AgentType_TCP_InComming {
-			this.Ping()
-		}
+	if this.last_ping_tick == GetNowTick() {
+		return
 	}
-}
-
-func (this *TcpConn) WriteGoroutine() {
-	write_buffer := make([]byte, 512)
-	tcp_conn := this.conn
-	write_queue := this.write_queue
-
-	msg_list := make([]interface{}, 16)
-
-	for {
-		c := write_queue.Get(msg_list, 16)
-		for i := uint32(0); i < c; i++ {
-			write_msg := msg_list[i].(*WriteWrapper)
-			if write_msg == nil {
-				goto write_close
-			}
-			write_buffer = write_buffer[0:]
-			if this.do_write(tcp_conn, write_msg, &write_buffer) == false {
-				goto write_close
-			}
-			msg_list[i] = nil
-			write_msg.reset()
-			write_pool.Put(write_msg)
-		}
+	atomic.StoreInt64(&this.last_ping_tick, GetNowTick())
+	if this.agent_type == AgentType_TCP_InComming {
+		this.Ping()
 	}
-write_close:
-	this.Close()
-	this.Destroy()
-}
-
-func (this *TcpConn) do_write(w io.Writer, msg *WriteWrapper, write_buffer *[]byte) bool {
-	switch msg.msg_type {
-	case 'P', 'R':
-		if MarshalMsgBinary(msg.msg_type, msg.msg_id, msg.buffer, write_buffer) == false {
-			return false
-		}
-	case 'T':
-		MarshalKeepAliveMsgBinary(write_buffer)
-	default:
-		return false
-	}
-	_, err := w.Write(*write_buffer)
-	if err == nil {
-		return true
-	}
-	//slog.LogInfo("tcp", "write msg error %s", err.Error())
-	return false
 }
 
 func (this *TcpConn) Ping() {
@@ -212,8 +158,23 @@ func (this *TcpConn) Ping() {
 	this.do_push_write(wrapper)
 }
 
+func (this *TcpConn) GetLastPingTime() int64 {
+	return atomic.LoadInt64(&this.last_ping_tick)
+}
+
 func (this *TcpConn) Pong() {
-	if NowKeepAliveTick-atomic.LoadInt64(&this.last_ping_tick) >= PONGTIME {
+	check_duration := PONGTIME / 1000
+	if GetNowTick()-this.GetLastPingTime() >= check_duration {
 		this.conn.Close()
+		return
+	}
+}
+
+func (this *TcpConn) recover() {
+	if r := recover(); r != nil {
+		slog.LogError("tcp_recovery", "recover error :%v", r)
+		slog.LogError("tcp_recovery", "%s", string(debug.Stack()))
+		this.Close()
+		this.Destroy()
 	}
 }

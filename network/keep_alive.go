@@ -4,6 +4,7 @@ import (
 	//"github.com/Cyinx/einx/slog"
 	"github.com/Cyinx/einx/timer"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -11,7 +12,7 @@ var (
 	EnableKeepAlive       = true
 	PINGTIME        int64 = 5 * 1000 //Millisecond
 	PONGTIME        int64 = PINGTIME * 2
-	CHECKTIME       int64 = 64 //Millisecond
+	CHECKTIME       int64 = 256 //Millisecond
 )
 
 type TimerHandler = timer.TimerHandler
@@ -29,7 +30,7 @@ var alive_manager = &aliveManager{
 	locker:        new(sync.Mutex),
 }
 
-var NowKeepAliveTick int64 = 0
+var nowTick int64 = 0
 
 func SetKeepAlive(open bool, pingTime int64) {
 	EnableKeepAlive = open
@@ -88,13 +89,17 @@ func RemovePong(linker Linker) {
 	alive_manager.locker.Unlock()
 }
 
+func GetNowTick() int64 {
+	return atomic.LoadInt64(&nowTick)
+}
+
 func OnKeepAliveUpdate() {
 	var ticker = time.NewTicker(time.Duration(CHECKTIME) * time.Millisecond)
 	timer_manager := alive_manager.timer_manager
 	locker := alive_manager.locker
 	for {
 		<-ticker.C
-		NowKeepAliveTick = time.Now().UnixNano() / 1e9
+		atomic.StoreInt64(&nowTick, time.Now().Unix())
 		locker.Lock()
 		timer_manager.Execute(100)
 		locker.Unlock()
