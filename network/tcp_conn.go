@@ -136,7 +136,7 @@ func (this *TcpConn) Run() {
 			h.ServeRpc(this, msg_id, msg)
 			break
 		case 'T':
-			atomic.StoreInt64(&this.last_ping_tick, NowKeepAliveTick)
+			this.OnPing()
 			break
 		default:
 			goto wait_close
@@ -145,6 +145,15 @@ func (this *TcpConn) Run() {
 
 wait_close:
 	this.Close()
+}
+
+func (this *TcpConn) OnPing() {
+	if this.last_ping_tick != NowKeepAliveTick {
+		atomic.StoreInt64(&this.last_ping_tick, NowKeepAliveTick)
+		if this.agent_type == AgentType_TCP_InComming {
+			this.Ping()
+		}
+	}
 }
 
 func (this *TcpConn) WriteGoroutine() {
