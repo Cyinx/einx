@@ -73,14 +73,14 @@ func (this *TcpClientMgr) connect(addr string, user_type int16) {
 	m := this.module
 	h := this.agent_handler
 
-	tcp_agent := newTcpConn(raw_conn, h, AgentType_TCP_OutGoing, &this.option)
+	tcp_agent := newTcpConn(raw_conn, h, Linker_TCP_OutGoing, &this.option)
 	tcp_agent.SetUserType(user_type)
 	m.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
 
 	go func() {
-		AddPing(tcp_agent)
+		ping_mgr.AddPing(tcp_agent)
 		tcp_agent.Run()
-		RemovePing(tcp_agent)
+		ping_mgr.RemovePing(tcp_agent)
 		m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 	}()
 }

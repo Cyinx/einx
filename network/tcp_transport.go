@@ -20,8 +20,8 @@ const (
 var bigEndian = binary.BigEndian
 
 // --------------------------------------------------------------------------------------------------------
-// |                                header              | body                          |
-// | type byte | body_length uint16 | packet_flag uint8 | msg_id uint32| msg_data []byte|
+// |                                header              |                body                          |
+// | type byte | body_length uint16 | packet_flag uint8 | msg_id uint32| msg_data []byte               |
 // --------------------------------------------------------------------------------------------------------
 var msg_header_length int = MSG_HEADER_LENGTH
 
@@ -127,6 +127,8 @@ func (t *tcpTransport) Recv() bool {
 			goto wait_close
 		}
 
+		now_tick := GetNowTick()
+
 		switch msg_packet.MsgType {
 		case 'P':
 			serve.ServeHandler(t, msg_id, msg)
@@ -135,13 +137,13 @@ func (t *tcpTransport) Recv() bool {
 			serve.ServeRpc(t, msg_id, msg)
 			msg_recv_count++
 		case 'T':
-			t.OnPing()
+			t.Pong(now_tick)
+			msg_recv_count++
 		default:
 			goto wait_close
 		}
 
-		nowTime := GetNowTick()
-		duration := nowTime - t.recv_check_time
+		duration := now_tick - t.recv_check_time
 
 		if duration < check_duration {
 			continue
@@ -156,7 +158,7 @@ func (t *tcpTransport) Recv() bool {
 		}
 
 		msg_recv_count = 0
-		t.recv_check_time = nowTime
+		t.recv_check_time = now_tick
 	}
 
 wait_close:

@@ -18,7 +18,7 @@ type TcpConn struct {
 	servehander    SessionHandler
 	last_ping_tick int64
 	remote_addr    string
-	agent_type     int16
+	conn_type      int16
 	user_type      int16
 
 	recv_buf        []byte
@@ -28,17 +28,16 @@ type TcpConn struct {
 	option          TransportOption
 }
 
-func newTcpConn(raw_conn net.Conn, h SessionHandler, agent_type int16, opt *TransportOption) *TcpConn {
+func newTcpConn(raw_conn net.Conn, h SessionHandler, conn_type int16, opt *TransportOption) *TcpConn {
 	tcp_agent := &TcpConn{
-		conn:           raw_conn,
-		close_flag:     0,
-		write_queue:    queue.NewCondQueue(),
-		agent_id:       agent.GenAgentID(),
-		servehander:    h,
-		last_ping_tick: GetNowTick(),
-		remote_addr:    raw_conn.RemoteAddr().(*net.TCPAddr).String(),
-		agent_type:     agent_type,
-		user_type:      0,
+		conn:        raw_conn,
+		close_flag:  0,
+		write_queue: queue.NewCondQueue(),
+		agent_id:    agent.GenAgentID(),
+		servehander: h,
+		remote_addr: raw_conn.RemoteAddr().(*net.TCPAddr).String(),
+		conn_type:   conn_type,
+		user_type:   0,
 
 		recv_buf:  buffer_pool.Get().([]byte),
 		write_buf: buffer_pool.Get().([]byte),
@@ -52,7 +51,7 @@ func (this *TcpConn) GetID() AgentID {
 }
 
 func (this *TcpConn) GetType() int16 {
-	return this.agent_type
+	return this.conn_type
 }
 
 func (this *TcpConn) GetUserType() int16 {
@@ -139,35 +138,42 @@ func (this *TcpConn) Run() {
 	}
 }
 
-func (this *TcpConn) OnPing() {
-	if this.last_ping_tick == GetNowTick() {
+func (this *TcpConn) BeginPing() {
+	atomic.StoreInt64(&this.last_ping_tick, GetNowTick())
+}
+
+func (this *TcpConn) Pong(now_tick int64) {
+	if this.last_ping_tick == now_tick {
 		return
 	}
-	atomic.StoreInt64(&this.last_ping_tick, GetNowTick())
-	if this.agent_type == AgentType_TCP_InComming {
-		this.Ping()
+	atomic.StoreInt64(&this.last_ping_tick, now_tick)
+	if this.conn_type == Linker_TCP_InComming {
+		this.DoPing()
 	}
 }
 
 func (this *TcpConn) Ping() {
-	wrapper := &WriteWrapper{
-		msg_type: 'T',
-		msg_id:   0,
-		buffer:   nil,
+	check_duration := PINGTIME / 1000
+	if GetNowTick()-this.GetLastPingTime() <= (check_duration * 2) {
+		if this.conn_type == Linker_TCP_OutGoing {
+			this.DoPing()
+		}
+		return
 	}
-	this.do_push_write(wrapper)
+	this.conn.Close()
 }
 
 func (this *TcpConn) GetLastPingTime() int64 {
 	return atomic.LoadInt64(&this.last_ping_tick)
 }
 
-func (this *TcpConn) Pong() {
-	check_duration := PONGTIME / 1000
-	if GetNowTick()-this.GetLastPingTime() >= check_duration {
-		this.conn.Close()
-		return
+func (this *TcpConn) DoPing() {
+	wrapper := &WriteWrapper{
+		msg_type: 'T',
+		msg_id:   0,
+		buffer:   nil,
 	}
+	this.do_push_write(wrapper)
 }
 
 func (this *TcpConn) recover() {

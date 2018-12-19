@@ -26,13 +26,13 @@ type ITcpServerMgr interface {
 }
 
 const (
-	AgentType_TCP_InComming = agent.AgentType_TCP_InComming
-	AgentType_TCP_OutGoing  = agent.AgentType_TCP_OutGoing
+	Linker_TCP_InComming = iota
+	Linker_TCP_OutGoing
 )
 
 type Linker interface {
+	GetID() AgentID
 	Ping()
-	Pong()
 }
 
 type ITcpClientMgr interface {
@@ -86,7 +86,7 @@ type SessionHandler interface {
 }
 
 func Run() {
-	go OnKeepAliveUpdate()
+	go ping_mgr.Run()
 }
 
 type TransportOption struct {

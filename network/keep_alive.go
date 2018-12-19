@@ -1,11 +1,40 @@
 package network
 
 import (
-	//"github.com/Cyinx/einx/slog"
+	"github.com/Cyinx/einx/event"
+	"github.com/Cyinx/einx/slog"
 	"github.com/Cyinx/einx/timer"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
+)
+
+type EventQueue = event.EventQueue
+
+const KEEP_ALIVE_POLL_COUNT = 128
+
+type PingEventMsg struct {
+	Sender Linker
+	Op     int
+}
+
+func (this *PingEventMsg) GetType() event.EventType {
+	return 0
+}
+
+func (this *PingEventMsg) GetSender() Agent {
+	return nil
+}
+
+func (this *PingEventMsg) Reset() {
+	this.Sender = nil
+	this.Op = 0
+}
+
+const (
+	PING_OP_TYPE_ADD_PING = iota
+	PING_OP_TYPE_REMOVE_PING
 )
 
 var (
@@ -18,16 +47,22 @@ var (
 type TimerHandler = timer.TimerHandler
 type TimerManager = timer.TimerManager
 
-type aliveManager struct {
+type PingMgr struct {
 	timer_manager *TimerManager
 	linkers       map[Linker]uint64
-	locker        *sync.Mutex
+	ev_queue      *EventQueue
+	event_pool    *sync.Pool
+	event_list    []interface{}
+	event_count   uint32
+	event_index   uint32
 }
 
-var alive_manager = &aliveManager{
+var ping_mgr = &PingMgr{
 	timer_manager: timer.NewTimerManager(),
 	linkers:       make(map[Linker]uint64),
-	locker:        new(sync.Mutex),
+	ev_queue:      event.NewEventQueue(),
+	event_pool:    &sync.Pool{New: func() interface{} { return new(PingEventMsg) }},
+	event_list:    make([]interface{}, KEEP_ALIVE_POLL_COUNT),
 }
 
 var nowTick int64 = 0
@@ -37,71 +72,92 @@ func SetKeepAlive(open bool, pingTime int64) {
 	PINGTIME = pingTime
 }
 
-func OnPing(args []interface{}) {
+func (p *PingMgr) OnPing(args []interface{}) {
 	linker := args[0].(Linker)
 	linker.Ping()
-	timer_id := alive_manager.timer_manager.AddTimer(uint64(PINGTIME), OnPing, linker)
-	alive_manager.linkers[linker] = timer_id
+	timer_id := p.timer_manager.AddTimer(uint64(PINGTIME), p.OnPing, linker)
+	p.linkers[linker] = timer_id
 }
 
-func AddPing(linker Linker) {
+func (p *PingMgr) AddPing(linker Linker) {
 	if EnableKeepAlive == false {
 		return
 	}
-	alive_manager.locker.Lock()
-	timer_id := alive_manager.timer_manager.AddTimer(uint64(PINGTIME), OnPing, linker)
-	alive_manager.linkers[linker] = timer_id
-	alive_manager.locker.Unlock()
+	event_msg := p.event_pool.Get().(*PingEventMsg)
+	event_msg.Sender = linker
+	event_msg.Op = PING_OP_TYPE_ADD_PING
+	p.ev_queue.Push(event_msg)
 }
 
-func RemovePing(linker Linker) {
-	alive_manager.locker.Lock()
-	if timer_id, ok := alive_manager.linkers[linker]; ok == true {
-		delete(alive_manager.linkers, linker)
-		alive_manager.timer_manager.DeleteTimer(timer_id)
+func (p *PingMgr) RemovePing(linker Linker) {
+	event_msg := p.event_pool.Get().(*PingEventMsg)
+	event_msg.Sender = linker
+	event_msg.Op = PING_OP_TYPE_REMOVE_PING
+	p.ev_queue.Push(event_msg)
+}
+
+func (p *PingMgr) recover() {
+	if r := recover(); r != nil {
+		slog.LogError("ping_recovery", "recover error :%v", r)
+		slog.LogError("ping_recovery", "%s", string(debug.Stack()))
+		go p.Run() // continue to run
 	}
-	alive_manager.locker.Unlock()
 }
 
-func OnPong(args []interface{}) {
-	linker := args[0].(Linker)
-	linker.Pong()
-	timer_id := alive_manager.timer_manager.AddTimer(uint64(PONGTIME), OnPong, linker)
-	alive_manager.linkers[linker] = timer_id
-}
+func (p *PingMgr) Run() {
+	defer p.recover()
+	var ticker = time.NewTicker(time.Duration(CHECKTIME) * time.Millisecond)
+	timer_manager := p.timer_manager
+	ev_queue := p.ev_queue
+	event_chan := ev_queue.GetChan()
+	event_list := p.event_list
+	for {
 
-func AddPong(linker Linker) {
-	if EnableKeepAlive == false {
-		return
+		atomic.StoreInt64(&nowTick, time.Now().Unix())
+
+		if p.event_index >= p.event_count {
+			p.event_count = ev_queue.Get(event_list, uint32(KEEP_ALIVE_POLL_COUNT))
+		}
+
+		for p.event_index < p.event_count {
+			ping_event := event_list[p.event_index].(*PingEventMsg)
+			event_list[p.event_index] = nil
+			p.event_index++
+			p.handle_event(ping_event)
+			ping_event.Reset()
+			p.event_pool.Put(ping_event)
+		}
+
+		timer_manager.Execute(256)
+
+		if p.event_count > 0 {
+			continue
+		}
+
+		select {
+		case <-event_chan:
+			ev_queue.WaiterWake()
+		case <-ticker.C:
+		}
 	}
-	alive_manager.locker.Lock()
-	timer_id := alive_manager.timer_manager.AddTimer(uint64(PONGTIME), OnPong, linker)
-	alive_manager.linkers[linker] = timer_id
-	alive_manager.locker.Unlock()
 }
 
-func RemovePong(linker Linker) {
-	alive_manager.locker.Lock()
-	if timer_id, ok := alive_manager.linkers[linker]; ok == true {
-		delete(alive_manager.linkers, linker)
-		alive_manager.timer_manager.DeleteTimer(timer_id)
+func (p *PingMgr) handle_event(e *PingEventMsg) {
+	linker := e.Sender
+	switch e.Op {
+	case PING_OP_TYPE_ADD_PING:
+		timer_id := p.timer_manager.AddTimer(uint64(PINGTIME), p.OnPing, linker)
+		p.linkers[linker] = timer_id
+	case PING_OP_TYPE_REMOVE_PING:
+		if timer_id, ok := p.linkers[linker]; ok == true {
+			delete(p.linkers, linker)
+			p.timer_manager.DeleteTimer(timer_id)
+		}
+	default:
+		slog.LogDebug("ping_mgr", "unknown ping event type [%v]", e.Op)
 	}
-	alive_manager.locker.Unlock()
 }
 
 func GetNowTick() int64 {
 	return atomic.LoadInt64(&nowTick)
-}
-
-func OnKeepAliveUpdate() {
-	var ticker = time.NewTicker(time.Duration(CHECKTIME) * time.Millisecond)
-	timer_manager := alive_manager.timer_manager
-	locker := alive_manager.locker
-	for {
-		<-ticker.C
-		atomic.StoreInt64(&nowTick, time.Now().Unix())
-		locker.Lock()
-		timer_manager.Execute(100)
-		locker.Unlock()
-	}
 }

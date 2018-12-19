@@ -93,13 +93,13 @@ func (this *TcpServerMgr) do_tcp_accept() {
 			continue
 		}
 
-		tcp_agent := newTcpConn(raw_conn, h, AgentType_TCP_InComming, &this.option)
+		tcp_agent := newTcpConn(raw_conn, h, Linker_TCP_InComming, &this.option)
 		m.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
 
 		go func() {
-			AddPong(tcp_agent)
+			ping_mgr.AddPing(tcp_agent)
 			tcp_agent.Run()
-			RemovePong(tcp_agent)
+			ping_mgr.RemovePing(tcp_agent)
 			m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
 		}()
 	}

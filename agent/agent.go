@@ -13,11 +13,6 @@ type Agent interface {
 	Close()
 }
 
-const (
-	AgentType_TCP_InComming = iota
-	AgentType_TCP_OutGoing
-)
-
 var agent_id uint64 = 0
 
 func GenAgentID() AgentID {
