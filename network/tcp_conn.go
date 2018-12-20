@@ -160,7 +160,7 @@ func (this *TcpConn) Ping() {
 		}
 		return
 	}
-	this.conn.Close()
+	this.Close()
 }
 
 func (this *TcpConn) GetLastPingTime() int64 {

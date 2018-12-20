@@ -7,6 +7,7 @@ import (
 	"sync"
 )
 
+//var module_map map[string]Module = make(map[string]Module)
 var module_map sync.Map
 var wait_close sync.WaitGroup
 var PerfomancePrint bool = false
@@ -72,7 +73,7 @@ func FindModule(name string) Module {
 	return nil
 }
 
-func Run() {
+func Start() {
 	module_map.Range(func(k interface{}, m interface{}) bool {
 		go func(m interface{}) { m.(ModuleWoker).Run(&wait_close) }(m)
 		return true

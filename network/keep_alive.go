@@ -109,7 +109,7 @@ func (p *PingMgr) Run() {
 	var ticker = time.NewTicker(time.Duration(CHECKTIME) * time.Millisecond)
 	timer_manager := p.timer_manager
 	ev_queue := p.ev_queue
-	event_chan := ev_queue.GetChan()
+	event_chan := ev_queue.SemaChan()
 	event_list := p.event_list
 	for {
 
@@ -130,15 +130,16 @@ func (p *PingMgr) Run() {
 
 		timer_manager.Execute(256)
 
-		if p.event_count > 0 {
+		if ev_queue.WaitNotify() == false {
 			continue
 		}
 
 		select {
 		case <-event_chan:
-			ev_queue.WaiterWake()
 		case <-ticker.C:
 		}
+
+		ev_queue.WaiterWake()
 	}
 }
 

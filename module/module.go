@@ -164,7 +164,7 @@ func (this *module) Run(wait *sync.WaitGroup) {
 		event_msg  EventMsg = nil
 		close_flag bool     = false
 		ev_queue            = this.ev_queue
-		event_chan          = ev_queue.GetChan()
+		event_chan          = ev_queue.SemaChan()
 		timer_tick          = time.NewTimer(time.Duration(MODULE_TIMER_INTERVAL) * time.Millisecond)
 		tick_c              = timer_tick.C
 		nextWake            = 0
@@ -189,6 +189,11 @@ func (this *module) Run(wait *sync.WaitGroup) {
 				break
 			}
 		}
+
+		if ev_queue.WaitNotify() == false {
+			continue
+		}
+
 		timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
 		select {
 		case close_flag = <-this.close_chan:
@@ -196,9 +201,10 @@ func (this *module) Run(wait *sync.WaitGroup) {
 				goto run_close
 			}
 		case <-event_chan:
-			ev_queue.WaiterWake()
 		case <-tick_c:
 		}
+
+		ev_queue.WaiterWake()
 	}
 
 run_close:

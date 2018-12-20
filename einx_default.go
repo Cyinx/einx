@@ -25,7 +25,7 @@ func Run() {
 	slog.Run()
 	console.Run()
 	network.Run()
-	module.Run()
+	module.Start()
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, os.Kill)
 	sig := <-c

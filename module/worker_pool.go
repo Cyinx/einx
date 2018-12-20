@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/Cyinx/einx/slog"
 	"sync"
+	"sync/atomic"
 )
 
 var worker_pools_map sync.Map
@@ -92,4 +93,10 @@ func (this *ModuleWorkerPool) RpcCall(name string, args ...interface{}) {
 	}
 	m := this.modules[hashkey%this.size] //route the rpc to worker by a simple hash key
 	m.RpcCall(name, args...)
+}
+
+func (this *ModuleWorkerPool) Balancer() Module {
+	idx := this.balance_id % this.size
+	atomic.AddUint32(&this.balance_id, 1)
+	return this.modules[idx]
 }
