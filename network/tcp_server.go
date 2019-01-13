@@ -54,6 +54,13 @@ func (this *TcpServerMgr) GetType() ComponentType {
 	return COMPONENT_TYPE_TCP_SERVER
 }
 
+func (this *TcpServerMgr) Address() net.Addr {
+	if this.listener == nil {
+		return nil
+	}
+	return this.listener.Addr()
+}
+
 func (this *TcpServerMgr) Start() {
 	listener, err := net.Listen("tcp", this.addr)
 	if err != nil {

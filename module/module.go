@@ -250,8 +250,10 @@ func (this *module) handle_data_event(event_msg EventMsg) {
 	data_event := event_msg.(*DataEventMsg)
 	handler, ok := this.msg_handler_map[data_event.TypeID]
 	if ok == true {
-		this.context.s = data_event.Sender
-		handler(this.context, data_event.MsgData)
+		ctx := this.context
+		ctx.s = data_event.Sender
+		handler(ctx, data_event.MsgData)
+		ctx.Reset()
 	} else {
 		slog.LogError("module", "module [%s] unregister msg handler msg type id[%d] %v!", this.name, data_event.TypeID, ok)
 	}
@@ -269,16 +271,21 @@ func (this *module) handle_component_event(event_msg EventMsg) {
 	mgr := com_event.Attach.(ComponentMgr)
 	this.commgr_map[c.GetID()] = mgr
 	this.component_map[c.GetID()] = c
-	this.context.c = c
-	mgr.OnComponentCreate(this.context, c.GetID())
+	ctx := this.context
+	ctx.c = c
+	mgr.OnComponentCreate(ctx, c.GetID())
+	ctx.Reset()
 }
 
 func (this *module) handle_component_error(event_msg EventMsg) {
 	com_event := event_msg.(*ComponentEventMsg)
 	c := com_event.Sender
 	if mgr, ok := this.commgr_map[c.GetID()]; ok == true {
-		this.context.c = c
-		mgr.OnComponentError(this.context, com_event.Attach.(error))
+		ctx := this.context
+		ctx.c = c
+		ctx.t = com_event.Attach
+		mgr.OnComponentError(ctx, com_event.Err)
+		ctx.Reset()
 		return
 	}
 	slog.LogError("component", "module[%v] not register component[%v] manager cant handle error:%v", this.name, c.GetID(), com_event.Attach)
@@ -310,8 +317,10 @@ func (this *module) handle_agent_closed(event_msg EventMsg) {
 func (this *module) handle_rpc(event_msg EventMsg) {
 	rpc_msg := event_msg.(*RpcEventMsg)
 	if handler, ok := this.rpc_handler_map[rpc_msg.RpcName]; ok == true {
-		this.context.s = rpc_msg.Sender
-		handler(this.context, rpc_msg.Data)
+		ctx := this.context
+		ctx.s = rpc_msg.Sender
+		handler(ctx, rpc_msg.Data)
+		ctx.Reset()
 	} else {
 		slog.LogError("module", "module [%v] unregister rpc handler! rpc name:[%v]", this.name, rpc_msg.RpcName)
 	}

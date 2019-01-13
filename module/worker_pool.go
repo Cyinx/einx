@@ -14,6 +14,8 @@ type WorkerPool interface {
 	RegisterRpcHandler(string, RpcHandler)
 	RegisterHandler(ProtoTypeID, MsgHandler)
 	RpcCall(string, ...interface{})
+	Balancer() Module
+	Const(string) Module
 }
 
 type ModuleWorkerPool struct {
@@ -99,4 +101,16 @@ func (this *ModuleWorkerPool) Balancer() Module {
 	idx := this.balance_id % this.size
 	atomic.AddUint32(&this.balance_id, 1)
 	return this.modules[idx]
+}
+
+func (this *ModuleWorkerPool) Const(n string) Module {
+	var hashkey uint32 = 0
+	length := len(n)
+	if length > 0 {
+		hashkey += uint32(n[0])
+		hashkey += uint32(n[length-1])
+		hashkey += uint32(n[(length-1)/2])
+		hashkey += uint32(length)
+	}
+	return this.modules[hashkey%this.size]
 }

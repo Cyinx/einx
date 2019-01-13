@@ -46,12 +46,15 @@ func NewLuaStae() *lua_state.LuaRuntime {
 	return lua_state.NewLuaStae()
 }
 
-func AddTcpServerMgr(m module.Module, addr string, mgr interface{}) {
+func AddTcpServerMgr(m module.Module, addr string, mgr interface{}, opts ...Option) {
 	m_eventer := m.(event.EventReceiver)
-	tcp_server := network.NewTcpServerMgr(
-		NetworkOption.ListenAddr(addr),
-		network.Module(m_eventer),
-		NetworkOption.ServeHandler(mgr.(SessionHandler)))
+
+	opts = append(opts, NetworkOption.ListenAddr(addr))
+	opts = append(opts, network.Module(m_eventer))
+	opts = append(opts, NetworkOption.ServeHandler(mgr.(SessionHandler)))
+
+	tcp_server := network.NewTcpServerMgr(opts...)
+
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = tcp_server
@@ -59,12 +62,14 @@ func AddTcpServerMgr(m module.Module, addr string, mgr interface{}) {
 	m_eventer.PushEventMsg(e)
 }
 
-func StartTcpClientMgr(m module.Module, name string, mgr interface{}) {
+func StartTcpClientMgr(m module.Module, name string, mgr interface{}, opts ...Option) {
 	m_eventer := m.(event.EventReceiver)
-	tcp_client := network.NewTcpClientMgr(
-		NetworkOption.Name(name),
-		network.Module(m_eventer),
-		NetworkOption.ServeHandler(mgr.(SessionHandler)))
+
+	opts = append(opts, NetworkOption.Name(name))
+	opts = append(opts, network.Module(m_eventer))
+	opts = append(opts, NetworkOption.ServeHandler(mgr.(SessionHandler)))
+
+	tcp_client := network.NewTcpClientMgr(opts...)
 
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE

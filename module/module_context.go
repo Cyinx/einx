@@ -4,7 +4,14 @@ type ModuleContext struct {
 	m Module
 	s Agent
 	c Component
+	t interface{}
 	v map[int]interface{}
+}
+
+func (this *ModuleContext) Reset() {
+	this.s = nil
+	this.c = nil
+	this.t = nil
 }
 
 func (this *ModuleContext) GetModule() Module {
@@ -17,6 +24,10 @@ func (this *ModuleContext) GetSender() Agent {
 
 func (this *ModuleContext) GetComponent() Component {
 	return this.c
+}
+
+func (this *ModuleContext) GetAttach() interface{} {
+	return this.t
 }
 
 func (this *ModuleContext) Store(k int, v interface{}) {

@@ -34,6 +34,7 @@ type ComponentEventMsg struct {
 	MsgType EventType
 	Sender  Component
 	Attach  interface{}
+	Err     error
 }
 
 func (this *ComponentEventMsg) GetType() EventType {
@@ -48,6 +49,7 @@ func (this *ComponentEventMsg) Reset() {
 	this.MsgType = 0
 	this.Sender = nil
 	this.Attach = nil
+	this.Err = nil
 }
 
 type SessionEventMsg struct {

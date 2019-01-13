@@ -65,7 +65,8 @@ func (this *TcpClientMgr) connect(addr string, user_type int16) {
 		e := &event.ComponentEventMsg{}
 		e.MsgType = event.EVENT_COMPONENT_ERROR
 		e.Sender = this
-		e.Attach = err
+		e.Attach = user_type
+		e.Err = err
 		this.module.PushEventMsg(e)
 		return
 	}

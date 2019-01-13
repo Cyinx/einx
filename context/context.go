@@ -13,6 +13,7 @@ type Context interface {
 	GetModule() Module
 	GetSender() Agent
 	GetComponent() Component
+	GetAttach() interface{}
 	Store(int, interface{})
 	Get(int) interface{}
 }

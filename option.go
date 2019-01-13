@@ -28,10 +28,11 @@ func Perfomance(b bool) Option {
 }
 
 type networkOpt struct {
-	Name         func(string) Option
-	Module       func(string) Option
-	ListenAddr   func(string) Option
-	ServeHandler func(SessionHandler) Option
+	Name              func(string) Option
+	Module            func(string) Option
+	ListenAddr        func(string) Option
+	ServeHandler      func(SessionHandler) Option
+	TransportMaxCount func(int) Option
 }
 
 var NetworkOption networkOpt = networkOpt{
@@ -40,6 +41,7 @@ var NetworkOption networkOpt = networkOpt{
 		m := GetModule(s)
 		return network.Module(m.(event.EventReceiver))
 	},
-	ListenAddr:   network.ListenAddr,
-	ServeHandler: network.ServeHandler,
+	ListenAddr:        network.ListenAddr,
+	ServeHandler:      network.ServeHandler,
+	TransportMaxCount: network.TransportMaxCount,
 }
