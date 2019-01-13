@@ -32,7 +32,10 @@ func (this *EventQueue) Push(event EventMsg) {
 	atomic.AddInt32(&this.q, 1)
 
 	if this.notify_one() == true {
-		this.ev_cond <- true
+		select {
+		case this.ev_cond <- true:
+		default:
+		}
 	}
 }
 
@@ -67,7 +70,7 @@ func (this *EventQueue) WaitNotify() bool {
 }
 
 func (this *EventQueue) WaiterWake() {
-
+	this.notify_one()
 }
 
 func (this *EventQueue) count() int {

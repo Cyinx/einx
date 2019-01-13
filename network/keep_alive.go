@@ -74,9 +74,12 @@ func SetKeepAlive(open bool, pingTime int64) {
 
 func (p *PingMgr) OnPing(args []interface{}) {
 	linker := args[0].(Linker)
-	linker.Ping()
-	timer_id := p.timer_manager.AddTimer(uint64(PINGTIME), p.OnPing, linker)
-	p.linkers[linker] = timer_id
+	if linker.Ping() == true {
+		timer_id := p.timer_manager.AddTimer(uint64(PINGTIME), p.OnPing, linker)
+		p.linkers[linker] = timer_id
+	} else {
+		delete(p.linkers, linker)
+	}
 }
 
 func (p *PingMgr) AddPing(linker Linker) {
@@ -117,6 +120,7 @@ func (p *PingMgr) Run() {
 
 		if p.event_index >= p.event_count {
 			p.event_count = ev_queue.Get(event_list, uint32(KEEP_ALIVE_POLL_COUNT))
+			p.event_index = 0
 		}
 
 		for p.event_index < p.event_count {

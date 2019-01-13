@@ -29,6 +29,7 @@ type TcpConn struct {
 }
 
 func newTcpConn(raw_conn net.Conn, h SessionHandler, conn_type int16, opt *TransportOption) *TcpConn {
+	nowTime := GetNowTick()
 	tcp_agent := &TcpConn{
 		conn:        raw_conn,
 		close_flag:  0,
@@ -39,9 +40,11 @@ func newTcpConn(raw_conn net.Conn, h SessionHandler, conn_type int16, opt *Trans
 		conn_type:   conn_type,
 		user_type:   0,
 
-		recv_buf:  buffer_pool.Get().([]byte),
-		write_buf: buffer_pool.Get().([]byte),
-		option:    *opt,
+		recv_buf:        buffer_pool.Get().([]byte),
+		write_buf:       buffer_pool.Get().([]byte),
+		option:          *opt,
+		last_ping_tick:  nowTime,
+		recv_check_time: nowTime,
 	}
 	return tcp_agent
 }
@@ -143,6 +146,9 @@ func (this *TcpConn) BeginPing() {
 }
 
 func (this *TcpConn) Pong(now_tick int64) {
+	if this.IsClosed() == true {
+		return
+	}
 	if this.last_ping_tick == now_tick {
 		return
 	}
@@ -152,15 +158,20 @@ func (this *TcpConn) Pong(now_tick int64) {
 	}
 }
 
-func (this *TcpConn) Ping() {
+func (this *TcpConn) Ping() bool {
+	if this.IsClosed() == true {
+		return false
+	}
 	check_duration := PINGTIME / 1000
-	if GetNowTick()-this.GetLastPingTime() <= (check_duration * 2) {
+	check_time := GetNowTick() - this.GetLastPingTime()
+	if check_time <= (check_duration * 2) {
 		if this.conn_type == Linker_TCP_OutGoing {
 			this.DoPing()
 		}
-		return
+		return true
 	}
 	this.Close()
+	return false
 }
 
 func (this *TcpConn) GetLastPingTime() int64 {
