@@ -36,3 +36,6 @@ a example server for einx (https://github.com/Cyinx/game_server_einx)
 
 ### License
 * einx is licensed under the [Apache License 2.0](https://github.com/Cyinx/einx/blob/master/LICENSE).
+
+### buy me a coffee
+* ![ali](https://github.com/Cyinx/einx/screenshots/ali.png)
