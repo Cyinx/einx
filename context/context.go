@@ -16,4 +16,5 @@ type Context interface {
 	GetAttach() interface{}
 	Store(int, interface{})
 	Get(int) interface{}
+	Done(args ...interface{})
 }

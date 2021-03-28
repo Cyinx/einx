@@ -37,7 +37,7 @@ func (this *MysqlMgr) GetType() component.ComponentType {
 	return component.COMPONENT_TYPE_DB_MYSQL
 }
 
-func (this *MysqlMgr) Start() {
+func (this *MysqlMgr) Start() bool {
 	var err error
 	this.session, err = sql.Open("mysql", this.dbcfg.String())
 	if err != nil {
@@ -46,9 +46,10 @@ func (this *MysqlMgr) Start() {
 		e.Sender = this
 		e.Attach = err
 		this.m.PushEventMsg(e)
-		return
+		slog.LogInfo("mysql", "mysql connect failed.")
+		return false
 	}
-	slog.LogInfo("mysql", "mysql connect success.")
+	return true
 }
 
 func (this *MysqlMgr) Close() {
@@ -135,5 +136,6 @@ func GetNamedRows(query interface{}) ([]map[string]interface{}, error) {
 			results = append(results, result)
 		}
 	}
+	_ = row.Close()
 	return results, nil
 }

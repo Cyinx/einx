@@ -44,7 +44,7 @@ func (this *MongoDBMgr) GetType() component.ComponentType {
 	return component.COMPONENT_TYPE_DB_MONGODB
 }
 
-func (this *MongoDBMgr) Start() {
+func (this *MongoDBMgr) Start() bool {
 	var err error
 	this.session, err = mgo.DialWithTimeout(this.dbcfg.String(), this.timeout)
 	if err != nil {
@@ -53,11 +53,12 @@ func (this *MongoDBMgr) Start() {
 		e.Sender = this
 		e.Attach = err
 		this.m.PushEventMsg(e)
-		return
+		slog.LogInfo("mongodb", "MongoDB Connect failed.")
+		return false
 	}
 
 	this.session.SetMode(mgo.Monotonic, true)
-	slog.LogInfo("mongodb", "MongoDB Connect success")
+	return true
 }
 
 func (this *MongoDBMgr) Close() {

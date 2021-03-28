@@ -25,6 +25,8 @@ type ComponentEventMsg = event.ComponentEventMsg
 type SessionEventMsg = event.SessionEventMsg
 type DataEventMsg = event.DataEventMsg
 type RpcEventMsg = event.RpcEventMsg
+type AwaitRpcEventMsg = event.AwaitRpcEventMsg
+type CustomActionEventMsg = event.CustomActionEventMsg
 type EventQueue = event.EventQueue
 type TimerHandler = timer.TimerHandler
 type TimerManager = timer.TimerManager
@@ -33,10 +35,11 @@ type Module = context.Module
 type Context = context.Context
 type ProtoTypeID = uint32
 type MsgHandler func(Context, interface{})
-type RpcHandler func(Context, []interface{})
+type RpcHandler func(Context, *ArgsVar)
 
 type ModuleRouter interface {
 	RouterMsg(Agent, ProtoTypeID, interface{})
+	RouterRpc(Agent, string, []interface{})
 	RegisterHandler(ProtoTypeID, MsgHandler)
 	RegisterRpcHandler(string, RpcHandler)
 }
@@ -52,278 +55,339 @@ var (
 )
 
 type module struct {
-	id              AgentID
-	ev_queue        *EventQueue
-	name            string
-	msg_handler_map map[ProtoTypeID]MsgHandler
-	rpc_handler_map map[string]RpcHandler
-	agent_map       map[AgentID]Agent
-	commgr_map      map[ComponentID]ComponentMgr
-	component_map   map[ComponentID]Component
-	rpc_msg_pool    *sync.Pool
-	data_msg_pool   *sync.Pool
-	event_msg_pool  *sync.Pool
-	timer_manager   *TimerManager
-	op_count        int64
-	close_chan      chan bool
-	context         *ModuleContext
-	event_list      []interface{}
-	event_count     uint32
-	event_index     uint32
-	begin_time      int64
+	id            AgentID
+	evQueue       *EventQueue
+	name          string
+	msgHandlerMap map[ProtoTypeID]MsgHandler
+	rpcHandlerMap map[string]RpcHandler
+	agentMap      map[AgentID]Agent
+	commgrMap     map[ComponentID]ComponentMgr
+	componentMap  map[ComponentID]Component
+	awaitMsgPool  *sync.Pool
+	rpcMsgPool    *sync.Pool
+	dataMsgPool   *sync.Pool
+	eventMsgPool  *sync.Pool
+	timerManager  *TimerManager
+	opCount       int64
+	closeChan     chan bool
+	context       *ModuleContext
+	args          ArgsVar
+	eventList     []interface{}
+	eventCount    uint32
+	eventIndex    uint32
+	beginTime     int64
 }
 
-func (this *module) GetID() AgentID {
-	return this.id
+func (m *module) GetID() AgentID {
+	return m.id
 }
 
-func (this *module) GetName() string {
-	return this.name
+func (m *module) GetName() string {
+	return m.name
 }
-func (this *module) PushEventMsg(ev EventMsg) {
-	this.ev_queue.Push(ev)
-}
-
-func (this *module) Close() {
-	this.close_chan <- true
-	slog.LogWarning("module", "module [%s] will close!", this.name)
+func (m *module) PushEventMsg(ev EventMsg) {
+	m.evQueue.Push(ev)
 }
 
-func (this *module) AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64 {
-	return this.timer_manager.AddTimer(delay, op, args...)
+func (m *module) Close() {
+	m.closeChan <- true
+	slog.LogWarning("module", "module [%s] will close!", m.name)
 }
 
-func (this *module) RemoveTimer(timer_id uint64) bool {
-	return this.timer_manager.DeleteTimer(timer_id)
+func (m *module) AddTimer(delay uint64, op TimerHandler, args ...interface{}) uint64 {
+	return m.timerManager.AddTimer(delay, op, args...)
 }
 
-func (this *module) PostEvent(event_type EventType, agent Agent, cid ComponentID) {
-	event := this.event_msg_pool.Get().(*SessionEventMsg)
-	event.MsgType = event_type
+func (m *module) RemoveTimer(timerId uint64) bool {
+	return m.timerManager.DeleteTimer(timerId)
+}
+
+func (m *module) PostEvent(eventType EventType, agent Agent, cid ComponentID, args ...interface{}) {
+	e := m.eventMsgPool.Get().(*SessionEventMsg)
+	e.MsgType = eventType
+	e.Sender = agent
+	e.Cid = cid
+	e.Args = args
+	m.evQueue.Push(e)
+}
+
+func (m *module) PostData(eventType EventType, typeID ProtoTypeID, agent Agent, data interface{}) {
+	event := m.dataMsgPool.Get().(*DataEventMsg)
+	event.MsgType = eventType
 	event.Sender = agent
-	event.Cid = cid
-	this.ev_queue.Push(event)
-}
-
-func (this *module) PostData(event_type EventType, type_id ProtoTypeID, agent Agent, data interface{}) {
-	event := this.data_msg_pool.Get().(*DataEventMsg)
-	event.MsgType = event_type
-	event.Sender = agent
-	event.TypeID = type_id
+	event.TypeID = typeID
 	event.MsgData = data
-	this.ev_queue.Push(event)
+	m.evQueue.Push(event)
 }
 
-func (this *module) RpcCall(name string, args ...interface{}) {
-	rpc_msg := this.rpc_msg_pool.Get().(*RpcEventMsg)
+func (m *module) RpcCall(name string, args ...interface{}) {
+	rpc_msg := m.rpcMsgPool.Get().(*RpcEventMsg)
 	rpc_msg.MsgType = event.EVENT_MODULE_RPC
-	rpc_msg.Sender = this
+	rpc_msg.Sender = m
 	rpc_msg.Data = args
 	rpc_msg.RpcName = name
-	this.ev_queue.Push(rpc_msg)
+	m.evQueue.Push(rpc_msg)
 }
 
-func (this *module) RouterMsg(agent Agent, msg_id ProtoTypeID, msg interface{}) {
-	this.PostData(event.EVENT_TCP_READ_MSG, msg_id, agent, msg)
+func (m *module) AwaitRpcCall(name string, args ...interface{}) []interface{} {
+	rpc_msg := m.awaitMsgPool.Get().(*AwaitRpcEventMsg)
+	rpc_msg.MsgType = event.EVENT_MODULE_AWAITRPC
+	rpc_msg.Sender = m
+	rpc_msg.Data = args
+	rpc_msg.RpcName = name
+	rpc_msg.Await = make(chan []interface{})
+	m.evQueue.Push(rpc_msg)
+	return <-rpc_msg.Await
 }
 
-func (this *module) RegisterHandler(type_id ProtoTypeID, handler MsgHandler) {
-	_, ok := this.msg_handler_map[type_id]
+func (m *module) RouterMsg(agent Agent, msgID ProtoTypeID, msg interface{}) {
+	m.PostData(event.EVENT_TCP_READ_MSG, msgID, agent, msg)
+}
+
+func (m *module) RouterRpc(agent Agent, name string, args []interface{}) {
+	rpc_msg := m.rpcMsgPool.Get().(*RpcEventMsg)
+	rpc_msg.MsgType = event.EVENT_MODULE_RPC
+	rpc_msg.Sender = agent
+	rpc_msg.Data = args
+	rpc_msg.RpcName = name
+	m.evQueue.Push(rpc_msg)
+}
+
+func (m *module) RegisterHandler(typeID ProtoTypeID, handler MsgHandler) {
+	_, ok := m.msgHandlerMap[typeID]
 	if ok == true {
-		slog.LogWarning("module", "MsgID[%d] has been registered", type_id)
+		slog.LogWarning("module", "MsgID[%d] has been registered", typeID)
 		return
 	}
-	this.msg_handler_map[type_id] = handler
+	m.msgHandlerMap[typeID] = handler
 }
 
-func (this *module) RegisterRpcHandler(rpc_name string, handler RpcHandler) {
-	_, ok := this.rpc_handler_map[rpc_name]
+func (m *module) RegisterRpcHandler(rpcName string, handler RpcHandler) {
+	_, ok := m.rpcHandlerMap[rpcName]
 	if ok == true {
-		slog.LogWarning("module", "Rpc[%s] has been registered", rpc_name)
+		slog.LogWarning("module", "Rpc[%s] has been registered", rpcName)
 		return
 	}
-	this.rpc_handler_map[rpc_name] = handler
+	m.rpcHandlerMap[rpcName] = handler
 }
 
-func (this *module) recover(wait *sync.WaitGroup) {
+func (m *module) recover(wait *sync.WaitGroup) {
 	if r := recover(); r != nil {
 		slog.LogError("module_recovery", "recover error :%v", r)
 		slog.LogError("module_recovery", "%s", string(debug.Stack()))
-		go this.Run(wait) // continue to run
+		go m.Run(wait) // continue to run
 	}
 }
 
-func (this *module) Run(wait *sync.WaitGroup) {
+func (m *module) Run(wait *sync.WaitGroup) {
 	runtime.LockOSThread()
-	defer this.recover(wait)
+	defer m.recover(wait)
 	wait.Add(1)
 	defer wait.Done()
-	this.begin_time = time.Now().UnixNano() / 1e9
-	timer_manager := this.timer_manager
+	m.beginTime = time.Now().UnixNano() / 1e9
+	timerManager := m.timerManager
 	var (
-		event_msg  EventMsg = nil
-		close_flag bool     = false
-		ev_queue            = this.ev_queue
-		event_chan          = ev_queue.SemaChan()
-		timer_tick          = time.NewTimer(time.Duration(MODULE_TIMER_INTERVAL) * time.Millisecond)
-		tick_c              = timer_tick.C
-		nextWake            = 0
-		event_list          = this.event_list
+		eventMsg  EventMsg = nil
+		closeFlag bool     = false
+		evQueue            = m.evQueue
+		eventChan          = evQueue.SemaChan()
+		timerTick          = time.NewTimer(time.Duration(MODULE_TIMER_INTERVAL) * time.Millisecond)
+		tickC              = timerTick.C
+		nextWake           = 0
+		eventList          = m.eventList
 	)
 
 	for {
 		for {
-			if this.event_index >= this.event_count {
-				this.event_count = ev_queue.Get(event_list, uint32(MODULE_EVENT_LENGTH))
-				this.event_index = 0
+			if m.eventIndex >= m.eventCount {
+				m.eventCount = evQueue.Get(eventList, uint32(MODULE_EVENT_LENGTH))
+				m.eventIndex = 0
 			}
-			for this.event_index < this.event_count {
-				event_msg = event_list[this.event_index].(EventMsg)
-				event_list[this.event_index] = nil
-				this.event_index++
-				this.handle_event(event_msg)
-				this.op_count++
+			for m.eventIndex < m.eventCount {
+				eventMsg = eventList[m.eventIndex].(EventMsg)
+				eventList[m.eventIndex] = nil
+				m.eventIndex++
+				m.handleEvent(eventMsg)
+				m.opCount++
 			}
-			nextWake = timer_manager.Execute(100)
-			if this.event_count <= 0 && nextWake > 0 {
+			nextWake = timerManager.Execute(100)
+			if m.eventCount <= 0 && nextWake > 0 {
 				break
 			}
 		}
 
-		if ev_queue.WaitNotify() == false {
+		if evQueue.WaitNotify() == false {
 			continue
 		}
 
-		timer_tick.Reset(time.Duration(nextWake) * time.Millisecond)
+		timerTick.Reset(time.Duration(nextWake) * time.Millisecond)
 		select {
-		case close_flag = <-this.close_chan:
-			if close_flag == true {
-				goto run_close
+		case closeFlag = <-m.closeChan:
+			if closeFlag == true {
+				goto runClose
 			}
-		case <-event_chan:
-		case <-tick_c:
+		case <-eventChan:
+		case <-tickC:
 		}
 
-		ev_queue.WaiterWake()
+		evQueue.WaiterWake()
 	}
 
-run_close:
-	this.do_close(wait)
+runClose:
+	m.doClose(wait)
 }
 
-func (this *module) do_close(wait *sync.WaitGroup) {
-	for _, c := range this.component_map {
+func (m *module) doClose(wait *sync.WaitGroup) {
+	for _, c := range m.componentMap {
 		c.Close()
 	}
-	for _, a := range this.agent_map {
+	for _, a := range m.agentMap {
 		a.Close()
 	}
 	if PerfomancePrint == true {
-		elasp_time := time.Now().UnixNano()/1e9 - this.begin_time
-		slog.LogError("perfomance", "module perfomance [%s] %d %d %d", this.name, elasp_time, this.op_count, this.op_count/elasp_time)
+		elaspTime := time.Now().UnixNano()/1e9 - m.beginTime
+		slog.LogError("perfomance", "module perfomance [%s] %d %d %d", m.name, elaspTime, m.opCount, m.opCount/elaspTime)
 	}
-	//slog.LogWarning("module", "module [%s] closed!", this.name)
+	//slog.LogWarning("module", "module [%s] closed!", m.name)
 }
 
-func (this *module) handle_event(event_msg EventMsg) {
-	switch event_msg.GetType() {
+func (m *module) handleEvent(eventMsg EventMsg) {
+	switch eventMsg.GetType() {
 	case event.EVENT_TCP_READ_MSG:
-		this.handle_data_event(event_msg)
+		m.handleDataEvent(eventMsg)
 	case event.EVENT_COMPONENT_CREATE:
-		this.handle_component_event(event_msg)
+		m.handleComponentEvent(eventMsg)
 	case event.EVENT_COMPONENT_ERROR:
-		this.handle_component_error(event_msg)
+		m.handleComponentError(eventMsg)
 	case event.EVENT_TCP_ACCEPTED:
-		this.handle_agent_enter(event_msg)
+		m.handleAgentEnter(eventMsg)
 	case event.EVENT_TCP_CONNECTED:
-		this.handle_agent_enter(event_msg)
+		m.handleAgentEnter(eventMsg)
 	case event.EVENT_TCP_CLOSED:
-		this.handle_agent_closed(event_msg)
+		m.handleAgentClosed(eventMsg)
 	case event.EVENT_MODULE_RPC:
-		this.handle_rpc(event_msg)
+		m.handleRpc(eventMsg)
+	case event.EVENT_MODULE_AWAITRPC:
+		m.handleAwaitRpc(eventMsg)
+	case event.EVENT_COMPONENT_CUSTOM:
+		m.handleCustomAction(eventMsg)
 	default:
-		slog.LogError("einx", "handle_event unknow event msg [%v]", event_msg.GetType())
+		slog.LogError("einx", "handleEvent unknow event msg [%v]", eventMsg.GetType())
 	}
 }
 
-func (this *module) handle_data_event(event_msg EventMsg) {
-	data_event := event_msg.(*DataEventMsg)
-	handler, ok := this.msg_handler_map[data_event.TypeID]
+func (m *module) handleDataEvent(eventMsg EventMsg) {
+	dataEventMsg := eventMsg.(*DataEventMsg)
+	handler, ok := m.msgHandlerMap[dataEventMsg.TypeID]
 	if ok == true {
-		ctx := this.context
-		ctx.s = data_event.Sender
-		handler(ctx, data_event.MsgData)
+		ctx := m.context
+		ctx.s = dataEventMsg.Sender
+		handler(ctx, dataEventMsg.MsgData)
 		ctx.Reset()
 	} else {
-		slog.LogError("module", "module [%s] unregister msg handler msg type id[%d] %v!", this.name, data_event.TypeID, ok)
+		slog.LogError("module", "module [%s] unregister msg handler msg type id[%d] %v!", m.name, dataEventMsg.TypeID, ok)
 	}
-	event_msg.Reset()
-	this.data_msg_pool.Put(event_msg)
+	eventMsg.Reset()
+	m.dataMsgPool.Put(eventMsg)
 }
 
-func (this *module) handle_component_event(event_msg EventMsg) {
-	com_event := event_msg.(*ComponentEventMsg)
-	c := com_event.Sender
-	if _, ok := this.component_map[c.GetID()]; ok == true {
-		slog.LogError("component", "module[%v] register component[%v]", this.name, c.GetID())
+func (m *module) handleComponentEvent(eventMsg EventMsg) {
+	comEvent := eventMsg.(*ComponentEventMsg)
+	c := comEvent.Sender
+	if _, ok := m.componentMap[c.GetID()]; ok == true {
+		slog.LogError("pakage", "module[%v] register pakage[%v]", m.name, c.GetID())
 		return
 	}
-	mgr := com_event.Attach.(ComponentMgr)
-	this.commgr_map[c.GetID()] = mgr
-	this.component_map[c.GetID()] = c
-	ctx := this.context
+	mgr := comEvent.Attach.(ComponentMgr)
+	m.commgrMap[c.GetID()] = mgr
+	m.componentMap[c.GetID()] = c
+	ctx := m.context
 	ctx.c = c
 	mgr.OnComponentCreate(ctx, c.GetID())
 	ctx.Reset()
 }
 
-func (this *module) handle_component_error(event_msg EventMsg) {
-	com_event := event_msg.(*ComponentEventMsg)
-	c := com_event.Sender
-	if mgr, ok := this.commgr_map[c.GetID()]; ok == true {
-		ctx := this.context
+func (m *module) handleComponentError(eventMsg EventMsg) {
+	comEvent := eventMsg.(*ComponentEventMsg)
+	c := comEvent.Sender
+	if mgr, ok := m.commgrMap[c.GetID()]; ok == true {
+		ctx := m.context
 		ctx.c = c
-		ctx.t = com_event.Attach
-		mgr.OnComponentError(ctx, com_event.Err)
+		ctx.t = comEvent.Attach
+		mgr.OnComponentError(ctx, comEvent.Err)
 		ctx.Reset()
 		return
 	}
-	slog.LogError("component", "module[%v] not register component[%v] manager cant handle error:%v", this.name, c.GetID(), com_event.Attach)
+	slog.LogError("pakage", "module[%v] not register pakage[%v] manager cant handle error:%v", m.name, c.GetID(), comEvent.Attach)
 }
 
-func (this *module) handle_agent_enter(event_msg EventMsg) {
-	ses_event := event_msg.(*SessionEventMsg)
-	agent := ses_event.Sender.(Agent)
-	this.agent_map[agent.GetID()] = agent
+func (m *module) handleAgentEnter(eventMsg EventMsg) {
+	s := eventMsg.(*SessionEventMsg)
+	a := s.Sender.(Agent)
+	m.agentMap[a.GetID()] = a
 
-	if sesmgr, ok := this.commgr_map[ses_event.Cid]; ok == true {
-		sesmgr.(SessionMgr).OnLinkerConneted(agent.GetID(), agent)
+	if sesMgr, ok := m.commgrMap[s.Cid]; ok == true {
+		sesMgr.(SessionMgr).OnLinkerConnected(a.GetID(), a)
 		return
 	}
-	slog.LogError("agent", "module[%v] agent enter not found component[%v]", this.name, ses_event.Cid)
+
+	slog.LogError("agent", "module[%v] agent enter not found pakage[%v]", m.name, s.Cid)
 }
 
-func (this *module) handle_agent_closed(event_msg EventMsg) {
-	ses_event := event_msg.(*SessionEventMsg)
-	agent := ses_event.Sender.(Agent)
-	delete(this.agent_map, agent.GetID())
-	if sesmgr, ok := this.commgr_map[ses_event.Cid]; ok == true {
-		sesmgr.(SessionMgr).OnLinkerClosed(agent.GetID(), agent)
+func (m *module) handleAgentClosed(eventMsg EventMsg) {
+	s := eventMsg.(*SessionEventMsg)
+	sender := s.Sender.(Agent)
+	delete(m.agentMap, sender.GetID())
+	if sesMgr, ok := m.commgrMap[s.Cid]; ok == true {
+		var err error = nil
+		if len(s.Args) > 0 {
+			err, _ = s.Args[0].(error)
+		}
+		sesMgr.(SessionMgr).OnLinkerClosed(sender.GetID(), sender, err)
 		return
 	}
-	slog.LogError("agent", "module[%v] agent closed not found component[%v]", this.name, ses_event.Cid)
+
+	slog.LogError("agent", "module[%v] agent closed not found pakage[%v]", m.name, s.Cid)
 }
 
-func (this *module) handle_rpc(event_msg EventMsg) {
-	rpc_msg := event_msg.(*RpcEventMsg)
-	if handler, ok := this.rpc_handler_map[rpc_msg.RpcName]; ok == true {
-		ctx := this.context
-		ctx.s = rpc_msg.Sender
-		handler(ctx, rpc_msg.Data)
+func (m *module) handleRpc(eventMsg EventMsg) {
+	rpcMsg := eventMsg.(*RpcEventMsg)
+	if handler, ok := m.rpcHandlerMap[rpcMsg.RpcName]; ok == true {
+		ctx := m.context
+		args := &m.args
+		ctx.s = rpcMsg.Sender
+		args.ref(rpcMsg.Data)
+		handler(ctx, args)
+		args.clear()
 		ctx.Reset()
 	} else {
-		slog.LogError("module", "module [%v] unregister rpc handler! rpc name:[%v]", this.name, rpc_msg.RpcName)
+		slog.LogError("module", "module [%v] unregister rpc handler! rpc name:[%v]", m.name, rpcMsg.RpcName)
 	}
-	event_msg.Reset()
-	this.rpc_msg_pool.Put(rpc_msg)
+	eventMsg.Reset()
+	m.rpcMsgPool.Put(rpcMsg)
+}
+
+func (m *module) handleAwaitRpc(eventMsg EventMsg) {
+	rpcMsg := eventMsg.(*AwaitRpcEventMsg)
+	if handler, ok := m.rpcHandlerMap[rpcMsg.RpcName]; ok == true {
+		ctx := &ModuleContext{}
+		args := &m.args
+		ctx.s = rpcMsg.Sender
+		ctx.u = rpcMsg.Await
+		args.ref(rpcMsg.Data)
+		handler(ctx, args)
+		args.clear()
+	} else {
+		slog.LogError("module", "module [%v] unregister rpc handler! rpc name:[%v]", m.name, rpcMsg.RpcName)
+	}
+	eventMsg.Reset()
+	m.awaitMsgPool.Put(rpcMsg)
+}
+
+func (m *module) handleCustomAction(eventMsg EventMsg) {
+	customMsg := eventMsg.(CustomActionEventMsg)
+	action := customMsg.GetAction()
+	if action != nil {
+		action(customMsg)
+	}
 }

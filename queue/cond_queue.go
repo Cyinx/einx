@@ -25,7 +25,7 @@ func (l *nullMutex) Unlock() {
 }
 
 type CondQueue struct {
-	rwqueue *RWQueue
+	rwQueue *RWQueue
 	lock    *nullMutex
 	cond    *sync.Cond
 	count   int32
@@ -33,7 +33,7 @@ type CondQueue struct {
 
 func NewCondQueue() *CondQueue {
 	q := &CondQueue{
-		rwqueue: NewRWQueue(),
+		rwQueue: NewRWQueue(),
 		lock:    &nullMutex{refCount: 0},
 	}
 	q.cond = sync.NewCond(q.lock)
@@ -42,7 +42,7 @@ func NewCondQueue() *CondQueue {
 }
 
 func (c *CondQueue) Push(msg interface{}) {
-	c.rwqueue.Push(msg)
+	c.rwQueue.Push(msg)
 	atomic.AddInt32(&c.count, 1)
 	lock := c.lock
 	waitCount := atomic.LoadInt32(&lock.refCount)
@@ -59,7 +59,7 @@ func (c *CondQueue) Get(list []interface{}, count uint32) uint32 {
 		c.cond.Wait()
 	}
 	lock.RemoveWaiter()
-	read_count, _ := c.rwqueue.Get(list, count)
-	atomic.AddInt32(&c.count, 0-int32(read_count))
-	return read_count
+	readCount, _ := c.rwQueue.Get(list, count)
+	atomic.AddInt32(&c.count, 0-int32(readCount))
+	return readCount
 }

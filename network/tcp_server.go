@@ -11,43 +11,40 @@ import (
 const TCP_ACCEPT_SLEEP = 150
 
 type TcpServerMgr struct {
-	name          string
-	listener      net.Listener
-	component_id  ComponentID
-	module        EventReceiver
-	agent_handler SessionHandler
-	addr          string
-	close_flag    int32
-	option        TransportOption
+	name         string
+	listener     net.Listener
+	componentID  ComponentID
+	module       EventReceiver
+	agentHandler SessionHandler
+	addr         string
+	closeFlag    int32
+	option       TransportOption
 }
 
 func NewTcpServerMgr(opts ...Option) Component {
-	tcp_server := &TcpServerMgr{
-		component_id: GenComponentID(),
-		close_flag:   0,
-		option: TransportOption{
-			msg_max_length: MSG_MAX_BODY_LENGTH,
-			msg_max_count:  MSG_DEFAULT_COUNT,
-		},
+	tcpServer := &TcpServerMgr{
+		componentID: GenComponentID(),
+		closeFlag:   0,
+		option:      newTransportOption(),
 	}
 
 	for _, opt := range opts {
-		opt(tcp_server)
+		opt(tcpServer)
 	}
 
-	if tcp_server.agent_handler == nil {
+	if tcpServer.agentHandler == nil {
 		panic("option agent handler is nil")
 	}
 
-	if tcp_server.module == nil {
+	if tcpServer.module == nil {
 		panic("option agent handler is nil")
 	}
 
-	return tcp_server
+	return tcpServer
 }
 
 func (this *TcpServerMgr) GetID() ComponentID {
-	return this.component_id
+	return this.componentID
 }
 
 func (this *TcpServerMgr) GetType() ComponentType {
@@ -61,36 +58,38 @@ func (this *TcpServerMgr) Address() net.Addr {
 	return this.listener.Addr()
 }
 
-func (this *TcpServerMgr) Start() {
+func (this *TcpServerMgr) Start() bool {
 	listener, err := net.Listen("tcp", this.addr)
 	if err != nil {
 		slog.LogError("tcp_server", "ListenTCP addr:[%s],Error:%s", this.addr, err.Error())
-		return
+		return false
 	}
 	this.listener = listener
-	go this.do_tcp_accept()
+	go this.doTcpAccept()
+	return true
 }
 
 func (this *TcpServerMgr) Close() {
-	if atomic.CompareAndSwapInt32(&this.close_flag, 0, 1) == true {
-		if this.listener != nil {
-			this.listener.Close()
+	if atomic.CompareAndSwapInt32(&this.closeFlag, 0, 1) == true {
+		if this.listener == nil {
+			return
 		}
+		_ = this.listener.Close()
 	}
 }
 
 func (this *TcpServerMgr) isRunning() bool {
-	close_flag := atomic.LoadInt32(&this.close_flag)
+	close_flag := atomic.LoadInt32(&this.closeFlag)
 	return close_flag == 0
 }
 
-func (this *TcpServerMgr) do_tcp_accept() {
+func (this *TcpServerMgr) doTcpAccept() {
 	m := this.module
-	h := this.agent_handler
+	h := this.agentHandler
 	listener := this.listener
 
 	for this.isRunning() {
-		raw_conn, err := listener.Accept()
+		rawConn, err := listener.Accept()
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && ne.Temporary() {
 				time.Sleep(TCP_ACCEPT_SLEEP)
@@ -100,14 +99,18 @@ func (this *TcpServerMgr) do_tcp_accept() {
 			continue
 		}
 
-		tcp_agent := newTcpConn(raw_conn, h, Linker_TCP_InComming, &this.option)
-		m.PostEvent(event.EVENT_TCP_ACCEPTED, tcp_agent, this.component_id)
+		tcpAgent := newTcpConn(rawConn, h, Linker_TCP_InComming, &this.option)
+		m.PostEvent(event.EVENT_TCP_ACCEPTED, tcpAgent, this.componentID)
 
 		go func() {
-			ping_mgr.AddPing(tcp_agent)
-			tcp_agent.Run()
-			ping_mgr.RemovePing(tcp_agent)
-			m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
+			pingMgr.AddPing(tcpAgent)
+			err := tcpAgent.Run()
+			pingMgr.RemovePing(tcpAgent)
+			m.PostEvent(event.EVENT_TCP_CLOSED, tcpAgent, this.componentID, err)
 		}()
 	}
+}
+
+func (this *TcpServerMgr) GetOption() *TransportOption {
+	return &this.option
 }

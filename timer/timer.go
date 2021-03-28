@@ -18,25 +18,25 @@ func newXTimer() *xtimer {
 	return timer
 }
 
-func (this *xtimer) reset() {
-	this.seqID = 0
-	this.runTick = 0
-	this.args = this.args[:0]
-	this.handler = nil
-	this.next = nil
-	this.running = false
+func (x *xtimer) reset() {
+	x.seqID = 0
+	x.runTick = 0
+	x.args = x.args[:0]
+	x.handler = nil
+	x.next = nil
+	x.running = false
 }
 
-func (this *xtimer) get_timer_id() uint64 {
-	seqID := uint64(this.seqID)
-	return ((this.runTick << 24) | (seqID & 0xffffff))
+func (x *xtimer) getTimerId() uint64 {
+	seqID := uint64(x.seqID)
+	return ((x.runTick << 24) | (seqID & 0xffffff))
 }
 
 type timerList struct {
-	head *xtimer
-	tail *xtimer
-
-	pool *timerPool
+	head    *xtimer
+	tail    *xtimer
+	running *xtimer
+	pool    *timerPool
 }
 
 func newTimerList(p *timerPool) *timerList {
@@ -48,78 +48,87 @@ func newTimerList(p *timerPool) *timerList {
 	return timerlist
 }
 
-func (this *timerList) add_timer(timer *xtimer) {
+func (l *timerList) addTimer(timer *xtimer) {
 	timer.next = nil
-	if this.tail == nil {
-		this.tail = timer
-		this.head = this.tail
+	if l.tail == nil {
+		l.tail = timer
+		l.head = l.tail
 		return
 	}
-	this.tail.next = timer
-	this.tail = timer
+	l.tail.next = timer
+	l.tail = timer
 }
 
-func (this *timerList) get_timer(seqID uint32) *xtimer {
-	curr_head := this.head
-	for curr_head != nil {
-		if curr_head.seqID == seqID {
-			return curr_head
+func (l *timerList) getTimer(seqID uint32) *xtimer {
+	currHead := l.head
+	for currHead != nil {
+		if currHead.seqID == seqID {
+			return currHead
 		}
-		curr_head = curr_head.next
+		currHead = currHead.next
 	}
 	return nil
 }
 
-func (this *timerList) delete_timer(seqID uint32) bool {
-	curr_head := this.head
-	var prev_head *xtimer = nil
-	for curr_head != nil {
-		if curr_head.seqID != seqID {
-			prev_head = curr_head
-			curr_head = curr_head.next
+func (l *timerList) deleteTimer(seqID uint32) bool {
+	running := l.running
+	if running != nil && running.seqID == seqID {
+		return true
+	}
+	currHead := l.head
+	var prevHead *xtimer = nil
+	for currHead != nil {
+		if currHead.seqID != seqID {
+			prevHead = currHead
+			currHead = currHead.next
 			continue
 		}
 
-		if curr_head.running {
+		if currHead.running {
 			return true
 		}
 
-		if prev_head == nil {
-			this.head = curr_head.next
+		if prevHead == nil {
+			l.head = currHead.next
 		} else {
-			prev_head.next = curr_head.next
+			prevHead.next = currHead.next
 		}
 
-		if curr_head.next == nil {
-			this.tail = prev_head
+		if currHead.next == nil {
+			l.tail = prevHead
 		}
-		this.pool.Put(curr_head)
+		l.pool.Put(currHead)
 		return true
 	}
 	return false
 }
 
-func (this *timerList) execute(now uint64, count uint32) (uint32, bool) {
-	var running_timer *xtimer = nil
-	run_count := uint32(0)
+func (l *timerList) execute(now uint64, count uint32) (uint32, bool) {
+	var runningTimer *xtimer = nil
+	runCount := uint32(0)
 
-	for ; this.head != nil; run_count++ {
+	for ; l.head != nil; runCount++ {
 
-		running_timer = this.head
-		if run_count >= count || running_timer.runTick > now {
-			return run_count, false
+		runningTimer = l.head
+		if runCount >= count || runningTimer.runTick > now {
+			return runCount, false
 		}
 
-		running_timer = this.head
-		running_timer.running = true
-		running_timer.handler(running_timer.args)
-		this.head = running_timer.next
-		this.pool.Put(running_timer)
+		l.head = runningTimer.next
+
+		if l.head == nil {
+			l.tail = nil
+		}
+
+		l.running = runningTimer
+
+		runningTimer.running = true
+		runningTimer.handler(runningTimer.args)
+
+		l.running = nil
+
+		l.pool.Put(runningTimer)
 	}
 
-	if this.head == nil {
-		this.tail = nil
-	}
-
-	return run_count, true
+	return runCount, true
 }

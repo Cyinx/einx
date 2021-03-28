@@ -32,20 +32,21 @@ func Close() {
 
 func NewModule(name string) Module {
 	m := &module{
-		id:              GenModuleID(),
-		ev_queue:        event.NewEventQueue(),
-		name:            name,
-		timer_manager:   timer.NewTimerManager(),
-		msg_handler_map: make(map[ProtoTypeID]MsgHandler),
-		rpc_handler_map: make(map[string]RpcHandler),
-		agent_map:       make(map[AgentID]Agent),
-		commgr_map:      make(map[ComponentID]ComponentMgr),
-		component_map:   make(map[ComponentID]Component),
-		rpc_msg_pool:    &sync.Pool{New: func() interface{} { return new(RpcEventMsg) }},
-		data_msg_pool:   &sync.Pool{New: func() interface{} { return new(DataEventMsg) }},
-		event_msg_pool:  &sync.Pool{New: func() interface{} { return new(SessionEventMsg) }},
-		close_chan:      make(chan bool),
-		event_list:      make([]interface{}, MODULE_EVENT_LENGTH),
+		id:            GenModuleID(),
+		evQueue:       event.NewEventQueue(),
+		name:          name,
+		timerManager:  timer.NewTimerManager(),
+		msgHandlerMap: make(map[ProtoTypeID]MsgHandler),
+		rpcHandlerMap: make(map[string]RpcHandler),
+		agentMap:      make(map[AgentID]Agent),
+		commgrMap:     make(map[ComponentID]ComponentMgr),
+		componentMap:  make(map[ComponentID]Component),
+		rpcMsgPool:    &sync.Pool{New: func() interface{} { return new(RpcEventMsg) }},
+		dataMsgPool:   &sync.Pool{New: func() interface{} { return new(DataEventMsg) }},
+		eventMsgPool:  &sync.Pool{New: func() interface{} { return new(SessionEventMsg) }},
+		awaitMsgPool:  &sync.Pool{New: func() interface{} { return new(AwaitRpcEventMsg) }},
+		closeChan:     make(chan bool),
+		eventList:     make([]interface{}, MODULE_EVENT_LENGTH),
 	}
 	m.context = &ModuleContext{m: m}
 	return m

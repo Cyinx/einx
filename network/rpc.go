@@ -1,6 +1,7 @@
 package network
 
 import (
+	"fmt"
 	"github.com/Cyinx/einx/slog"
 	"math"
 )
@@ -23,9 +24,9 @@ func RpcMarshal(b []byte, val interface{}) []byte {
 	case float32, float64:
 		n := math.Float64bits(v.(float64))
 		buffer = append(b, 'd', '2', byte(n), byte(n>>8), byte(n>>16), byte(n>>24), byte(n>>32), byte(n>>40), byte(n>>48), byte(n>>56))
-	case int, int32, int64, uint32, uint64:
-		buffer = append(b, 'i')
-		I64i := v.(int64)
+	case int, int16, uint16, int32, int64, uint32, uint64:
+		I64i, Itype := convertInteger(v)
+		buffer = append(b, Itype)
 		ux := uint64(I64i) << 1
 		if I64i < 0 {
 			ux = ^ux
@@ -35,6 +36,10 @@ func RpcMarshal(b []byte, val interface{}) []byte {
 			ux >>= 7
 		}
 		buffer = append(buffer, byte(ux))
+	case []byte:
+		slen := uint32(len(v))
+		buffer = append(b, '!', byte(slen), byte(slen>>8), byte(slen>>16), byte(slen>>24))
+		buffer = append(buffer, v...)
 	case map[string]interface{}:
 		buffer = append(b, '[')
 		for key, value := range v {
@@ -43,14 +48,56 @@ func RpcMarshal(b []byte, val interface{}) []byte {
 		buffer = append(buffer, ']')
 	case []interface{}:
 		buffer = append(b, '{')
-		for _, v := range v {
-			buffer = RpcMarshal(buffer, v)
+		for _, m := range v {
+			buffer = RpcMarshal(buffer, m)
 		}
 		buffer = append(buffer, '}')
 	default:
-		break
+		panic("unsopported rpc type")
 	}
 	return buffer
+}
+
+func convertInteger(val interface{}) (int64, byte) {
+	switch v := val.(type) {
+	case int:
+		return int64(v), 'i'
+	case int16:
+		return int64(v), 'w'
+	case uint16:
+		return int64(v), 'm'
+	case int32:
+		return int64(v), 'q'
+	case uint32:
+		return int64(v), 'p'
+	case int64:
+		return v, 'l'
+	case uint64:
+		return int64(v), 'n'
+	default:
+		panic("unknown integer type.")
+	}
+}
+
+func makeInteger(x int64, t byte) interface{} {
+	switch t {
+	case 'i':
+		return int(x)
+	case 'w':
+		return int16(x)
+	case 'm':
+		return uint16(x)
+	case 'q':
+		return int32(x)
+	case 'p':
+		return uint32(x)
+	case 'l':
+		return x
+	case 'n':
+		return uint64(x)
+	default:
+		panic(fmt.Sprintf("unknown integer type [%v]", t))
+	}
 }
 
 func RpcUnMarshal(b []byte) (interface{}, []byte) {
@@ -72,6 +119,15 @@ func RpcUnMarshal(b []byte) (interface{}, []byte) {
 		}
 		slen := uint32(b[1]) | uint32(b[2])<<8 | uint32(b[3])<<16 | uint32(b[4])<<24
 		return string(b[5 : 5+slen]), b[5+slen:]
+	case '!':
+		if len(b) < 5 {
+			slog.LogWarning("rpc_unmarshal", "error:unknow unmarshal []byte")
+			return nil, b
+		}
+		slen := uint32(b[1]) | uint32(b[2])<<8 | uint32(b[3])<<16 | uint32(b[4])<<24
+		newBytes := make([]byte, slen)
+		copy(newBytes, b[5:5+slen])
+		return newBytes, b[5+slen:]
 	case 'd':
 		if len(b) < 9 {
 			slog.LogWarning("rpc_unmarshal", "error:unknow unmarshal number")
@@ -80,7 +136,7 @@ func RpcUnMarshal(b []byte) (interface{}, []byte) {
 		n := uint64(b[1]) | uint64(b[2])<<8 | uint64(b[3])<<16 | uint64(b[4])<<24 |
 			uint64(b[5])<<32 | uint64(b[6])<<40 | uint64(b[7])<<48 | uint64(b[8])<<56
 		return math.Float64frombits(n), b[9:]
-	case 'i':
+	case 'i', 'w', 'm', 'q', 'p', 'l', 'n':
 		length := len(b)
 		if length < 2 {
 			slog.LogWarning("rpc_unmarshal", "error:unknow unmarshal varint")
@@ -110,7 +166,7 @@ func RpcUnMarshal(b []byte) (interface{}, []byte) {
 		if ux&1 != 0 {
 			x = ^x
 		}
-		return x, b[i+1:]
+		return makeInteger(x, t), b[i+1:]
 	case '[':
 		var key interface{}
 		var val interface{}

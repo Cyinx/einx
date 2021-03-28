@@ -46,19 +46,19 @@ func (this *TcpClientMgr) GetType() ComponentType {
 	return COMPONENT_TYPE_TCP_CLIENT
 }
 
-func (this *TcpClientMgr) Start() {
-
+func (this *TcpClientMgr) Start() bool {
+	return true
 }
 
 func (this *TcpClientMgr) Close() {
 
 }
 
-func (this *TcpClientMgr) Connect(addr string, user_type int16) {
+func (this *TcpClientMgr) Connect(addr string, user_type interface{}) {
 	go this.connect(addr, user_type)
 }
 
-func (this *TcpClientMgr) connect(addr string, user_type int16) {
+func (this *TcpClientMgr) connect(addr string, user_type interface{}) {
 	raw_conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		slog.LogWarning("tcp_client", "tcp connect failed %v", err)
@@ -79,9 +79,13 @@ func (this *TcpClientMgr) connect(addr string, user_type int16) {
 	m.PostEvent(event.EVENT_TCP_CONNECTED, tcp_agent, this.component_id)
 
 	go func() {
-		ping_mgr.AddPing(tcp_agent)
-		tcp_agent.Run()
-		ping_mgr.RemovePing(tcp_agent)
-		m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id)
+		pingMgr.AddPing(tcp_agent)
+		err := tcp_agent.Run()
+		pingMgr.RemovePing(tcp_agent)
+		m.PostEvent(event.EVENT_TCP_CLOSED, tcp_agent, this.component_id, err)
 	}()
+}
+
+func (this *TcpClientMgr) GetOption() *TransportOption {
+	return &this.option
 }

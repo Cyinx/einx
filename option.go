@@ -15,24 +15,26 @@ func LogPath(p string) Option {
 	}
 }
 
-func KeepAlive(open bool, pingTime int64) Option {
-	return func(args ...interface{}) {
-		network.SetKeepAlive(open, pingTime)
-	}
-}
-
 func Perfomance(b bool) Option {
 	return func(args ...interface{}) {
 		module.PerfomancePrint = b
 	}
 }
 
+func OnClosing(f func()) Option {
+	return func(args ...interface{}) {
+		_einxDefault.onClose = f
+	}
+}
+
 type networkOpt struct {
-	Name              func(string) Option
-	Module            func(string) Option
-	ListenAddr        func(string) Option
-	ServeHandler      func(SessionHandler) Option
-	TransportMaxCount func(int) Option
+	Name               func(string) Option
+	Module             func(string) Option
+	ListenAddr         func(string) Option
+	ServeHandler       func(SessionHandler) Option
+	TransportMaxCount  func(int) Option
+	TransportMaxLength func(int) Option
+	TransportKeepAlive func(bool, int64) Option
 }
 
 var NetworkOption networkOpt = networkOpt{
@@ -41,7 +43,9 @@ var NetworkOption networkOpt = networkOpt{
 		m := GetModule(s)
 		return network.Module(m.(event.EventReceiver))
 	},
-	ListenAddr:        network.ListenAddr,
-	ServeHandler:      network.ServeHandler,
-	TransportMaxCount: network.TransportMaxCount,
+	ListenAddr:         network.ListenAddr,
+	ServeHandler:       network.ServeHandler,
+	TransportMaxCount:  network.TransportMaxCount,
+	TransportMaxLength: network.TransportMaxLength,
+	TransportKeepAlive: network.TransportKeepAlive,
 }

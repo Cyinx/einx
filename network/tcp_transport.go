@@ -3,7 +3,6 @@ package network
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/Cyinx/einx/slog"
 	"io"
 	"net"
 )
@@ -15,6 +14,7 @@ const (
 	MSG_MAX_BODY_LENGTH    = 8096
 	MSG_DEFAULT_BUF_LENGTH = 1024
 	MSG_DEFAULT_COUNT      = 100
+	MSG_COUNT_CHECK_TIME   = 3000
 )
 
 var bigEndian = binary.BigEndian
@@ -23,7 +23,7 @@ var bigEndian = binary.BigEndian
 // |                                header              |                body                          |
 // | type byte | body_length uint16 | packet_flag uint8 | msg_id uint32| msg_data []byte               |
 // --------------------------------------------------------------------------------------------------------
-var msg_header_length int = MSG_HEADER_LENGTH
+var msgHeaderLength int = MSG_HEADER_LENGTH
 
 type transPacket struct {
 	MsgType    byte
@@ -33,185 +33,157 @@ type transPacket struct {
 
 type tcpTransport = TcpConn
 
-func (t *tcpTransport) reseveWriteBuf(size int) {
-	if cap(t.write_buf) < int(size) {
-		buf := t.write_buf
-		t.write_buf = make([]byte, size)
-		buffer_pool.Put(buf)
-	} else {
-		t.write_buf = t.write_buf[0:size]
-	}
-}
-
-func (t *tcpTransport) Write() bool {
-	tcp_conn := t.conn
-	write_queue := t.write_queue
-	msg_list := make([]interface{}, 16)
+func (n *tcpTransport) Write() bool {
+	tcpConn := n.conn
+	wq := n.writeQueue
+	msgList := make([]interface{}, 16)
 	for {
-		c := write_queue.Get(msg_list, 16)
+		c := wq.Get(msgList, 16)
 		for i := uint32(0); i < c; i++ {
-			write_msg := msg_list[i].(*WriteWrapper)
-			if write_msg == nil {
-				goto write_close
+			m := msgList[i]
+			if m == nil {
+				goto writeClose
 			}
-			if t.WriteMsgPacket(tcp_conn, write_msg) == false {
-				goto write_close
+			wg := m.(ITransportMsg)
+			if n.WriteMsgPacket(tcpConn, wg) == false {
+				goto writeClose
 			}
-			msg_list[i] = nil
-			write_msg.reset()
-			write_pool.Put(write_msg)
+			msgList[i] = nil
+			wg.reset()
 		}
 	}
-write_close:
-	buf := t.write_buf
-	t.write_buf = nil
-	buffer_pool.Put(buf)
+writeClose:
+	buf := n.writeBuf
+	n.writeBuf = nil
+	bufferPool.Put(buf)
 	return false
 }
 
-func (t *tcpTransport) WriteMsgPacket(conn net.Conn, msg *WriteWrapper) bool {
-	switch msg.msg_type {
+func (n *tcpTransport) WriteMsgPacket(conn net.Conn, msg ITransportMsg) bool {
+	switch msg.GetType() {
 	case 'P', 'R':
-		t.packMsgBuf(msg)
+		tsBuf := msg.(*TransportMsgPack)
+		n.packMsgBuf(tsBuf)
 	case 'T':
-		t.packPingMsg()
+		n.packPingMsg()
 	default:
 		return false
 	}
 
-	_, err := conn.Write(t.write_buf)
+	buf := n.writeBuf
+	rb := buf.ReadBuf(buf.Count())
+	_, err := conn.Write(rb)
 	if err == nil {
 		return true
 	}
 	return false
 }
 
-func (t *tcpTransport) packMsgBuf(msg *WriteWrapper) {
-	msg_buf := msg.buffer
-	var msg_body_length int = len(msg_buf) + MSG_ID_LENGTH
-	var msg_length int = msg_body_length + MSG_HEADER_LENGTH
+func (n *tcpTransport) packMsgBuf(msg *TransportMsgPack) {
+	mBytes := msg.Buf
+	var bodyLength int = len(mBytes) + MSG_ID_LENGTH
+	var msgLength int = bodyLength + MSG_HEADER_LENGTH
 
-	t.reseveWriteBuf(msg_length)
+	buf := n.writeBuf
+	buf.Reserve(msgLength)
 
-	buffer := t.write_buf
-	buffer[0] = msg.msg_type
-	bigEndian.PutUint16(buffer[1:], uint16(msg_body_length))
-	buffer[3] = 0
+	var wl int = 0
+	wl += buf.WriteUint8(msg.msgType)
+	wl += buf.WriteUint32(uint32(bodyLength))
+	wl += buf.WriteUint8(0)
 
-	bigEndian.PutUint32(buffer[4:], msg.msg_id)
-
-	copy(buffer[MSG_HEADER_LENGTH+MSG_ID_LENGTH:], msg_buf)
+	wl += buf.WriteUint32(msg.msgID)
+	wl += buf.WriteBytes(mBytes)
 }
 
-func (t *tcpTransport) packPingMsg() {
-	t.reseveWriteBuf(MSG_HEADER_LENGTH)
-	buffer := t.write_buf
+func (n *tcpTransport) packPingMsg() {
+	buf := n.writeBuf
+	buf.Reserve(MSG_HEADER_LENGTH)
+	buffer := buf.WriteBuf()
 	buffer[0] = 'T'
 	buffer[1] = 0
 	buffer[2] = 0
 	buffer[3] = 0
+	buf.Write(MSG_HEADER_LENGTH)
 }
 
-func (t *tcpTransport) Recv() bool {
-
-	tcp_conn := t.conn
-	serve := t.servehander
-	msg_packet := &t.msg_packet
-
-	msg_recv_count := int64(0)
-	check_duration := PONGTIME / 1000
+func (n *tcpTransport) Recv() bool {
+	tcpConn := n.conn
+	serve := n.serveHandler
+	msgPacket := &n.msgPacket
 
 	for {
-		msg_id, msg, err := t.ReadMsgPacket(tcp_conn)
+		msgID, msg, err := n.ReadMsgPacket(tcpConn)
 		if err != nil {
-			goto wait_close
+			goto waitClose
 		}
 
-		now_tick := GetNowTick()
+		nowTick := UnixTS()
 
-		switch msg_packet.MsgType {
+		switch msgPacket.MsgType {
 		case 'P':
-			serve.ServeHandler(t, msg_id, msg)
-			msg_recv_count++
+			serve.ServeHandler(n, msgID, msg)
 		case 'R':
-			serve.ServeRpc(t, msg_id, msg)
-			msg_recv_count++
+			serve.ServeRpc(n, msgID, msg)
 		case 'T':
-			t.Pong(now_tick)
-			msg_recv_count++
+			n.Pong(nowTick)
 		default:
-			goto wait_close
+			goto waitClose
 		}
-
-		duration := now_tick - t.recv_check_time
-
-		if duration < check_duration {
-			continue
-		}
-
-		max_msg_count := duration * int64(t.option.msg_max_count)
-
-		if msg_recv_count >= max_msg_count {
-			slog.LogError("tcp_conn", "tcp conn [%v] recv beyond max msg count. recv msg count [%v].duration [%v].option count [%v]",
-				t.RemoteAddr().String(), msg_recv_count, duration, t.option.msg_max_count)
-			goto wait_close
-		}
-
-		msg_recv_count = 0
-		t.recv_check_time = now_tick
 	}
 
-wait_close:
-	buf := t.recv_buf
-	t.recv_buf = nil
-	buffer_pool.Put(buf)
+waitClose:
+	buf := n.recvBuf
+	n.recvBuf = nil
+	bufferPool.Put(buf)
 	return false
 }
 
-func (t *tcpTransport) reseveRecvBuf(size int) {
-	if cap(t.recv_buf) < int(size) {
-		buf := t.recv_buf
-		t.recv_buf = make([]byte, size)
-		buffer_pool.Put(buf)
-	} else {
-		t.recv_buf = t.recv_buf[0:size]
-	}
-}
+func (n *tcpTransport) ReadMsgPacket(conn net.Conn) (ProtoTypeID, []byte, error) {
+	buf := n.writeBuf
+	buf.Reserve(MSG_HEADER_LENGTH)
 
-func (t *tcpTransport) ReadMsgPacket(conn net.Conn) (ProtoTypeID, []byte, error) {
+	mBytes := buf.WriteBuf()
+	var rl int = 0
+	rl, err := io.ReadFull(conn, mBytes)
 
-	t.reseveRecvBuf(MSG_HEADER_LENGTH)
-
-	if _, err := io.ReadFull(conn, t.recv_buf); err != nil {
+	if err != nil {
 		return 0, nil, err
 	}
 
-	msg_packet := &t.msg_packet
+	buf.write(rl)
 
-	msg_packet.MsgType = t.recv_buf[0]
-	msg_packet.BodyLength = bigEndian.Uint16(t.recv_buf[1:])
-	msg_packet.PacketFlag = t.recv_buf[3]
+	msgPacket := &n.msgPacket
 
-	if msg_packet.MsgType == 'T' {
+	msgPacket.MsgType = mBytes[0]
+	msgPacket.BodyLength = bigEndian.Uint16(mBytes[1:])
+	msgPacket.PacketFlag = mBytes[3]
+
+	if msgPacket.MsgType == 'T' {
 		return 0, nil, nil
 	}
 
-	if msg_packet.BodyLength >= t.option.msg_max_length {
+	if uint32(msgPacket.BodyLength) >= n.option.msg_max_length {
 		return 0, nil, errors.New("msg packet length too long.")
 	}
 
-	t.reseveRecvBuf(int(msg_packet.BodyLength))
+	buf.Reserve(int(msgPacket.BodyLength))
 
-	if _, err := io.ReadFull(conn, t.recv_buf); err != nil {
+	mBytes = buf.WriteBuf()
+
+	rl, err = io.ReadFull(conn, mBytes)
+	if err != nil {
 		return 0, nil, err
 	}
 
-	if len(t.recv_buf) < MSG_ID_LENGTH {
+	buf.write(rl)
+
+	if rl < MSG_ID_LENGTH {
 		return 0, nil, errors.New("msg packet length error")
 	}
 
-	var msg_id ProtoTypeID = 0
-	msg_id = bigEndian.Uint32(t.recv_buf)
-	msg_body := t.recv_buf[MSG_ID_LENGTH:]
-	return msg_id, msg_body, nil
+	var msgID ProtoTypeID = 0
+	msgID = bigEndian.Uint32(mBytes)
+	msgBody := mBytes[MSG_ID_LENGTH:]
+	return msgID, msgBody, nil
 }

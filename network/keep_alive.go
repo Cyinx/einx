@@ -6,7 +6,6 @@ import (
 	"github.com/Cyinx/einx/timer"
 	"runtime/debug"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -17,6 +16,7 @@ const KEEP_ALIVE_POLL_COUNT = 128
 type PingEventMsg struct {
 	Sender Linker
 	Op     int
+	Tick   int64
 }
 
 func (this *PingEventMsg) GetType() event.EventType {
@@ -35,13 +35,13 @@ func (this *PingEventMsg) Reset() {
 const (
 	PING_OP_TYPE_ADD_PING = iota
 	PING_OP_TYPE_REMOVE_PING
+	PING_OP_TYPE_DO_PONG
 )
 
 var (
-	EnableKeepAlive       = true
-	PINGTIME        int64 = 5 * 1000 //Millisecond
-	PONGTIME        int64 = PINGTIME * 2
-	CHECKTIME       int64 = 256 //Millisecond
+	//PINGTIME        int64 = 5 * 1000 //Millisecond
+	//PONGTIME        int64 = PINGTIME * 2
+	CHECKTIME int64 = 256 //Millisecond
 )
 
 type TimerHandler = timer.TimerHandler
@@ -57,7 +57,7 @@ type PingMgr struct {
 	event_index   uint32
 }
 
-var ping_mgr = &PingMgr{
+var pingMgr = &PingMgr{
 	timer_manager: timer.NewTimerManager(),
 	linkers:       make(map[Linker]uint64),
 	ev_queue:      event.NewEventQueue(),
@@ -65,17 +65,17 @@ var ping_mgr = &PingMgr{
 	event_list:    make([]interface{}, KEEP_ALIVE_POLL_COUNT),
 }
 
-var nowTick int64 = 0
+var beginTime = time.Now()
 
-func SetKeepAlive(open bool, pingTime int64) {
-	EnableKeepAlive = open
-	PINGTIME = pingTime
+func UnixTS() int64 {
+	tick := time.Since(beginTime).Nanoseconds()
+	return int64(tick / 1e6)
 }
 
 func (p *PingMgr) OnPing(args []interface{}) {
 	linker := args[0].(Linker)
 	if linker.Ping() == true {
-		timer_id := p.timer_manager.AddTimer(uint64(PINGTIME), p.OnPing, linker)
+		timer_id := p.timer_manager.AddTimer(uint64(linker.GetOption().ping_time), p.OnPing, linker)
 		p.linkers[linker] = timer_id
 	} else {
 		delete(p.linkers, linker)
@@ -83,7 +83,7 @@ func (p *PingMgr) OnPing(args []interface{}) {
 }
 
 func (p *PingMgr) AddPing(linker Linker) {
-	if EnableKeepAlive == false {
+	if linker.GetOption().enable_ping == false {
 		return
 	}
 	event_msg := p.event_pool.Get().(*PingEventMsg)
@@ -96,6 +96,14 @@ func (p *PingMgr) RemovePing(linker Linker) {
 	event_msg := p.event_pool.Get().(*PingEventMsg)
 	event_msg.Sender = linker
 	event_msg.Op = PING_OP_TYPE_REMOVE_PING
+	p.ev_queue.Push(event_msg)
+}
+
+func (p *PingMgr) DoPong(linker Linker, tick int64) {
+	event_msg := p.event_pool.Get().(*PingEventMsg)
+	event_msg.Sender = linker
+	event_msg.Op = PING_OP_TYPE_DO_PONG
+	event_msg.Tick = tick
 	p.ev_queue.Push(event_msg)
 }
 
@@ -115,8 +123,6 @@ func (p *PingMgr) Run() {
 	event_chan := ev_queue.SemaChan()
 	event_list := p.event_list
 	for {
-
-		atomic.StoreInt64(&nowTick, time.Now().Unix())
 
 		if p.event_index >= p.event_count {
 			p.event_count = ev_queue.Get(event_list, uint32(KEEP_ALIVE_POLL_COUNT))
@@ -151,18 +157,16 @@ func (p *PingMgr) handle_event(e *PingEventMsg) {
 	linker := e.Sender
 	switch e.Op {
 	case PING_OP_TYPE_ADD_PING:
-		timer_id := p.timer_manager.AddTimer(uint64(PINGTIME), p.OnPing, linker)
+		timer_id := p.timer_manager.AddTimer(uint64(linker.GetOption().ping_time), p.OnPing, linker)
 		p.linkers[linker] = timer_id
 	case PING_OP_TYPE_REMOVE_PING:
 		if timer_id, ok := p.linkers[linker]; ok == true {
 			delete(p.linkers, linker)
 			p.timer_manager.DeleteTimer(timer_id)
 		}
+	case PING_OP_TYPE_DO_PONG:
+		linker.DoPong(e.Tick)
 	default:
-		slog.LogDebug("ping_mgr", "unknown ping event type [%v]", e.Op)
+		slog.LogDebug("pingMgr", "unknown ping event type [%v]", e.Op)
 	}
-}
-
-func GetNowTick() int64 {
-	return atomic.LoadInt64(&nowTick)
 }

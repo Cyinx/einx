@@ -11,8 +11,9 @@ import (
 	"os/signal"
 )
 
-var _einx_default = &einx{
-	close_chan: make(chan bool),
+var _einxDefault = &einx{
+	closeChan: make(chan bool),
+	onClose:   nil,
 }
 
 func Init(opts ...Option) {
@@ -22,7 +23,6 @@ func Init(opts ...Option) {
 }
 
 func Run() {
-	slog.Run()
 	console.Run()
 	network.Run()
 	module.Start()
@@ -30,11 +30,15 @@ func Run() {
 	signal.Notify(c, os.Interrupt, os.Kill)
 	sig := <-c
 	slog.LogWarning("einx", "einx will close down (signal: %v)", sig)
-	_einx_default.do_close()
+	_einxDefault.doClose()
+}
+
+func ContinueClose() {
+	_einxDefault.continueClose()
 }
 
 func Close() {
-	_einx_default.close()
+	_einxDefault.close()
 	slog.Close()
 }
 
@@ -47,44 +51,44 @@ func NewLuaStae() *lua_state.LuaRuntime {
 }
 
 func AddTcpServerMgr(m module.Module, addr string, mgr interface{}, opts ...Option) {
-	m_eventer := m.(event.EventReceiver)
+	er := m.(event.EventReceiver)
 
 	opts = append(opts, NetworkOption.ListenAddr(addr))
-	opts = append(opts, network.Module(m_eventer))
+	opts = append(opts, network.Module(er))
 	opts = append(opts, NetworkOption.ServeHandler(mgr.(SessionHandler)))
 
-	tcp_server := network.NewTcpServerMgr(opts...)
+	tcpServer := network.NewTcpServerMgr(opts...)
 
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
-	e.Sender = tcp_server
+	e.Sender = tcpServer
 	e.Attach = mgr
-	m_eventer.PushEventMsg(e)
+	er.PushEventMsg(e)
 }
 
 func StartTcpClientMgr(m module.Module, name string, mgr interface{}, opts ...Option) {
-	m_eventer := m.(event.EventReceiver)
+	er := m.(event.EventReceiver)
 
 	opts = append(opts, NetworkOption.Name(name))
-	opts = append(opts, network.Module(m_eventer))
+	opts = append(opts, network.Module(er))
 	opts = append(opts, NetworkOption.ServeHandler(mgr.(SessionHandler)))
 
-	tcp_client := network.NewTcpClientMgr(opts...)
+	tcpClient := network.NewTcpClientMgr(opts...)
 
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
-	e.Sender = tcp_client
+	e.Sender = tcpClient
 	e.Attach = mgr
-	m_eventer.PushEventMsg(e)
+	er.PushEventMsg(e)
 }
 
 func AddModuleComponent(m module.Module, c Component, mgr interface{}) {
-	m_eventer := m.(event.EventReceiver)
+	er := m.(event.EventReceiver)
 	e := &event.ComponentEventMsg{}
 	e.MsgType = event.EVENT_COMPONENT_CREATE
 	e.Sender = c
 	e.Attach = mgr
-	m_eventer.PushEventMsg(e)
+	er.PushEventMsg(e)
 }
 
 func CreateModuleWorkers(name string, size int) WorkerPool {

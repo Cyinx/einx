@@ -12,15 +12,18 @@ import (
 	"sync"
 )
 
-type EventMsg = event.EventMsg
-type EventType = event.EventType
 type Agent = agent.Agent
 type AgentID = agent.AgentID
-type Component = component.Component
-type ComponentID = component.ComponentID
+type Module = context.Module
+type Context = context.Context
+type EventMsg = event.EventMsg
+type EventType = event.EventType
+type ArgsVar = module.ArgsVar
 type MsgHandler = module.MsgHandler
 type RpcHandler = module.RpcHandler
 type WorkerPool = module.WorkerPool
+type Component = component.Component
+type ComponentID = component.ComponentID
 type ModuleRouter = module.ModuleRouter
 type ComponentMgr = module.ComponentMgr
 type SessionEventMsg = event.SessionEventMsg
@@ -33,18 +36,27 @@ type ITcpClientMgr = network.ITcpClientMgr
 type ITcpServerMgr = network.ITcpServerMgr
 type TimerHandler = timer.TimerHandler
 type EventReceiver = event.EventReceiver
-type Module = context.Module
-type Context = context.Context
+type ITranMsgMultiple = network.ITranMsgMultiple
 
 type einx struct {
-	end_wait   sync.WaitGroup
-	close_chan chan bool
+	endWait   sync.WaitGroup
+	closeChan chan bool
+	onClose   func()
 }
 
-func (this *einx) do_close() {
+func (e *einx) doClose() {
+	onClose := e.onClose
+	if onClose != nil {
+		onClose()
+		<-e.closeChan
+	}
+}
+
+func (e *einx) close() {
 	module.Close()
+	e.endWait.Wait()
 }
 
-func (this *einx) close() {
-	this.end_wait.Wait()
+func (e *einx) continueClose() {
+	e.closeChan <- true
 }

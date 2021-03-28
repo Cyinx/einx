@@ -1,6 +1,7 @@
 package network
 
 import (
+	"errors"
 	"github.com/Cyinx/einx/agent"
 	"github.com/Cyinx/einx/queue"
 	"github.com/Cyinx/einx/slog"
@@ -11,187 +12,204 @@ import (
 )
 
 type TcpConn struct {
-	agent_id       AgentID
-	conn           net.Conn
-	close_flag     uint32
-	write_queue    *queue.CondQueue
-	servehander    SessionHandler
-	last_ping_tick int64
-	remote_addr    string
-	conn_type      int16
-	user_type      int16
+	agentID      AgentID
+	conn         net.Conn
+	closeFlag    uint32
+	writeQueue   *queue.CondQueue
+	serveHandler SessionHandler
+	lastPingTick int64
+	remoteAddr   string
+	connType     int16
+	pingClose    int32
+	userType     interface{}
 
-	recv_buf        []byte
-	write_buf       []byte
-	msg_packet      transPacket
-	recv_check_time int64
-	option          TransportOption
+	recvBuf       *BytesBuffer
+	writeBuf      *BytesBuffer
+	msgPacket     transPacket
+	recvCheckTime int64
+	msgRecvCount  int64
+	option        *TransportOption
 }
 
 func newTcpConn(raw_conn net.Conn, h SessionHandler, conn_type int16, opt *TransportOption) *TcpConn {
-	nowTime := GetNowTick()
-	tcp_agent := &TcpConn{
-		conn:        raw_conn,
-		close_flag:  0,
-		write_queue: queue.NewCondQueue(),
-		agent_id:    agent.GenAgentID(),
-		servehander: h,
-		remote_addr: raw_conn.RemoteAddr().(*net.TCPAddr).String(),
-		conn_type:   conn_type,
-		user_type:   0,
+	nowTime := UnixTS()
+	tcpAgent := &TcpConn{
+		conn:         raw_conn,
+		closeFlag:    0,
+		writeQueue:   queue.NewCondQueue(),
+		agentID:      agent.GenAgentID(),
+		serveHandler: h,
+		remoteAddr:   raw_conn.RemoteAddr().(*net.TCPAddr).String(),
+		connType:     conn_type,
+		userType:     0,
 
-		recv_buf:        buffer_pool.Get().([]byte),
-		write_buf:       buffer_pool.Get().([]byte),
-		option:          *opt,
-		last_ping_tick:  nowTime,
-		recv_check_time: nowTime,
+		recvBuf:       bufferPool.Get().(*BytesBuffer),
+		writeBuf:      bufferPool.Get().(*BytesBuffer),
+		option:        opt,
+		lastPingTick:  nowTime,
+		recvCheckTime: nowTime,
 	}
-	return tcp_agent
+	return tcpAgent
 }
 
-func (this *TcpConn) GetID() AgentID {
-	return this.agent_id
+func (n *TcpConn) GetID() AgentID {
+	return n.agentID
 }
 
-func (this *TcpConn) GetType() int16 {
-	return this.conn_type
+func (n *TcpConn) GetType() int16 {
+	return n.connType
 }
 
-func (this *TcpConn) GetUserType() int16 {
-	return this.user_type
+func (n *TcpConn) GetUserType() interface{} {
+	return n.userType
 }
 
-func (this *TcpConn) SetUserType(t int16) {
-	this.user_type = t
+func (n *TcpConn) SetUserType(t interface{}) {
+	n.userType = t
 }
 
-func (this *TcpConn) ReadMsg() ([]byte, error) {
+func (n *TcpConn) ReadMsg() ([]byte, error) {
 	return nil, nil
 }
 
-func (this *TcpConn) IsClosed() bool {
-	close_flag := atomic.LoadUint32(&this.close_flag)
+func (n *TcpConn) IsClosed() bool {
+	close_flag := atomic.LoadUint32(&n.closeFlag)
 	return close_flag == 1
 }
 
-func (this *TcpConn) do_push_write(wrapper *WriteWrapper) bool {
-	this.write_queue.Push(wrapper)
+func (n *TcpConn) doPushWrite(wrapper ITransportMsg) bool {
+	n.writeQueue.Push(wrapper)
 	return true
 }
 
-var write_pool *sync.Pool = &sync.Pool{New: func() interface{} { return new(WriteWrapper) }}
+func (n *TcpConn) MultipleMsg() ITranMsgMultiple {
+	x := &TransportMultiple{}
+	x.trans = n
+	return x
+}
 
-func (this *TcpConn) WriteMsg(msg_id ProtoTypeID, b []byte) bool {
-	if this.IsClosed() == true {
+var writePool *sync.Pool = &sync.Pool{New: func() interface{} { return new(TransportMsgPack) }}
+
+func (n *TcpConn) WriteMsg(msgID ProtoTypeID, b []byte) bool {
+	if n.IsClosed() == true {
 		return false
 	}
 
-	wrapper := write_pool.Get().(*WriteWrapper)
-	wrapper.msg_type = 'P'
-	wrapper.msg_id = msg_id
-	wrapper.buffer = b
+	w := writePool.Get().(*TransportMsgPack)
+	w.msgType = 'P'
+	w.msgID = msgID
+	w.Buf = b
 
-	return this.do_push_write(wrapper)
+	return n.doPushWrite(w)
 }
 
-func (this *TcpConn) RpcCall(msg_id ProtoTypeID, b []byte) bool {
-	if this.IsClosed() == true {
+func (n *TcpConn) RpcCall(msgID ProtoTypeID, b []byte) bool {
+	if n.IsClosed() == true {
 		return false
 	}
 
-	wrapper := write_pool.Get().(*WriteWrapper)
-	wrapper.msg_type = 'P'
-	wrapper.msg_id = msg_id
-	wrapper.buffer = b
+	w := writePool.Get().(*TransportMsgPack)
+	w.msgType = 'R'
+	w.msgID = msgID
+	w.Buf = b
 
-	return this.do_push_write(wrapper)
+	return n.doPushWrite(w)
 }
 
-func (this *TcpConn) LocalAddr() net.Addr {
+func (n *TcpConn) LocalAddr() net.Addr {
 	return nil
 }
 
-func (this *TcpConn) RemoteAddr() net.Addr {
-	return this.conn.RemoteAddr()
+func (n *TcpConn) RemoteAddr() net.Addr {
+	return n.conn.RemoteAddr()
 }
 
-func (this *TcpConn) Close() {
-	if atomic.CompareAndSwapUint32(&this.close_flag, 0, 1) == true {
-		this.do_push_write(nil)
+func (n *TcpConn) Close() {
+	if atomic.CompareAndSwapUint32(&n.closeFlag, 0, 1) == true {
+		n.doPushWrite(nil)
 	}
 }
 
-func (this *TcpConn) Destroy() {
-	this.conn.Close()
+func (n *TcpConn) Destroy() {
+	if n.conn != nil {
+		_ = n.conn.Close()
+	}
 }
 
-func (this *TcpConn) Run() {
-	defer this.recover()
+func (n *TcpConn) Run() error {
+	defer n.recover()
 
 	go func() {
-		defer this.recover()
-		if this.Write() == false {
-			this.Close()
-			this.Destroy()
+		defer n.recover()
+		if n.Write() == false {
+			n.Close()
+			n.Destroy()
 		}
 	}()
 
-	if this.Recv() == false {
-		this.Close()
+	if n.Recv() == false {
+		return errors.New("tcp transport recv error")
 	}
+	return nil
 }
 
-func (this *TcpConn) BeginPing() {
-	atomic.StoreInt64(&this.last_ping_tick, GetNowTick())
-}
-
-func (this *TcpConn) Pong(now_tick int64) {
-	if this.IsClosed() == true {
+func (n *TcpConn) Pong(nowTick int64) {
+	if n.IsClosed() == true {
 		return
 	}
-	if this.last_ping_tick == now_tick {
-		return
-	}
-	atomic.StoreInt64(&this.last_ping_tick, now_tick)
-	if this.conn_type == Linker_TCP_InComming {
-		this.DoPing()
-	}
+
+	pingMgr.DoPong(n, nowTick)
 }
 
-func (this *TcpConn) Ping() bool {
-	if this.IsClosed() == true {
+func (n *TcpConn) DoPong(nowTick int64) {
+	n.lastPingTick = nowTick
+
+	if n.connType != Linker_TCP_InComming {
+		return
+	}
+
+	n.DoPing()
+}
+
+func (n *TcpConn) Ping() bool {
+	if n.IsClosed() == true {
 		return false
 	}
-	check_duration := PINGTIME / 1000
-	check_time := GetNowTick() - this.GetLastPingTime()
-	if check_time <= (check_duration * 2) {
-		if this.conn_type == Linker_TCP_OutGoing {
-			this.DoPing()
+
+	duration := n.option.ping_time
+	checkTime := UnixTS() - n.lastPingTick
+	if checkTime <= (duration*2 + 500) {
+		if n.connType == Linker_TCP_OutGoing {
+			n.DoPing()
 		}
 		return true
 	}
-	this.Close()
+
+	atomic.StoreInt32(&n.pingClose, 1)
+	n.Close()
 	return false
 }
 
-func (this *TcpConn) GetLastPingTime() int64 {
-	return atomic.LoadInt64(&this.last_ping_tick)
+func (n *TcpConn) DoPing() {
+	wrapper := &TransportMsgPack{
+		msgType: 'T',
+		msgID:   0,
+		Buf:     nil,
+	}
+	n.doPushWrite(wrapper)
 }
 
-func (this *TcpConn) DoPing() {
-	wrapper := &WriteWrapper{
-		msg_type: 'T',
-		msg_id:   0,
-		buffer:   nil,
+func (n *TcpConn) recover() {
+	r := recover()
+	if r == nil {
+		return
 	}
-	this.do_push_write(wrapper)
+	slog.LogError("tcp_recovery", "recover error :%v", r)
+	slog.LogError("tcp_recovery", "%s", string(debug.Stack()))
+	n.Close()
+	n.Destroy()
 }
 
-func (this *TcpConn) recover() {
-	if r := recover(); r != nil {
-		slog.LogError("tcp_recovery", "recover error :%v", r)
-		slog.LogError("tcp_recovery", "%s", string(debug.Stack()))
-		this.Close()
-		this.Destroy()
-	}
+func (n *TcpConn) GetOption() *TransportOption {
+	return n.option
 }

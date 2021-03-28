@@ -16,30 +16,30 @@ func Run() {
 
 func doRun() {
 	for {
-		read_line, err := reader.ReadString('\n')
+		readLine, err := reader.ReadString('\n')
 		if err != nil {
 			break
 		}
 
-		read_line = strings.TrimSuffix(read_line[:len(read_line)-1], "\r")
-		contents := strings.Fields(read_line)
+		readLine = strings.TrimSuffix(readLine[:len(readLine)-1], "\r")
+		contents := strings.Fields(readLine)
 
 		if len(contents) < 2 {
 			continue
 		}
 
-		module_name := contents[0]
+		moduleName := contents[0]
 		command := contents[1]
-		args_strings := contents[2:]
-		args := make([]interface{}, len(args_strings))
-		for k, v := range args_strings {
+		argsStrings := contents[2:]
+		args := make([]interface{}, len(argsStrings))
+		for k, v := range argsStrings {
 			args[k] = v
 		}
-		m := module.FindModule(module_name)
+		m := module.FindModule(moduleName)
 		if m != nil {
 			m.RpcCall(command, args...)
 		} else {
-			slog.LogWarning("console", "module [%v] not found!", module_name)
+			slog.LogWarning("console", "module [%v] not found!", moduleName)
 		}
 	}
 }

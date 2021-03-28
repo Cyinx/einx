@@ -34,12 +34,14 @@ const (
 type Linker interface {
 	GetID() AgentID
 	Ping() bool
+	DoPong(int64)
+	GetOption() *TransportOption
 }
 
 type ITcpClientMgr interface {
 	GetID() ComponentID
 	GetType() ComponentType
-	Connect(addr string, user_type int16)
+	Connect(addr string, user_type interface{})
 }
 
 type ConnType uint16
@@ -49,16 +51,93 @@ const (
 	ConnType_UDP
 )
 
-type WriteWrapper struct {
-	msg_type byte
-	msg_id   ProtoTypeID
-	buffer   []byte
+type ITransportMsg interface {
+	GetType() byte
+	reset()
 }
 
-func (w *WriteWrapper) reset() {
-	w.msg_type = 0
-	w.msg_id = 0
-	w.buffer = nil
+type TransportMsgPack struct {
+	msgType byte
+	msgID   ProtoTypeID
+	Buf     []byte
+}
+
+func (m *TransportMsgPack) GetType() byte {
+	return m.msgType
+}
+
+func (w *TransportMsgPack) reset() {
+	w.msgType = 0
+	w.msgID = 0
+	w.Buf = nil
+
+	writePool.Put(w)
+}
+
+type ITransporter interface {
+	IsClosed() bool
+	doPushWrite(ITransportMsg) bool
+}
+
+type ITranMsgMultiple interface {
+	WriteMsg(ProtoTypeID, []byte) bool
+	RpcCall(ProtoTypeID, []byte) bool
+	Done() bool
+}
+
+type TransportMultiple struct {
+	trans    ITransporter
+	count    int
+	msgArray []*TransportMsgPack
+}
+
+func (m *TransportMultiple) GetType() byte {
+	return 'B'
+}
+
+func (m *TransportMultiple) WriteMsg(msgID ProtoTypeID, b []byte) bool {
+	if m.trans.IsClosed() == true {
+		return false
+	}
+
+	w := writePool.Get().(*TransportMsgPack)
+	w.msgType = 'P'
+	w.msgID = msgID
+	w.Buf = b
+	m.count += len(b)
+	m.msgArray = append(m.msgArray, w)
+	return true
+}
+
+func (m *TransportMultiple) RpcCall(msgiD ProtoTypeID, b []byte) bool {
+	if m.trans.IsClosed() == true {
+		return false
+	}
+
+	w := writePool.Get().(*TransportMsgPack)
+	w.msgType = 'R'
+	w.msgID = msgiD
+	w.Buf = b
+	m.count += len(b)
+	m.msgArray = append(m.msgArray, w)
+	return true
+}
+
+func (m *TransportMultiple) Done() bool {
+	if m.trans.IsClosed() == true {
+		return false
+	}
+	m.trans.doPushWrite(m)
+	return true
+}
+
+func (b *TransportMultiple) reset() {
+	b.trans = nil
+	msgArray := b.msgArray
+	b.msgArray = nil
+	for _, v := range msgArray {
+		writePool.Put(v)
+	}
 }
 
 const (
@@ -70,15 +149,17 @@ type NetLinker interface {
 	GetID() AgentID
 	Close()
 	RemoteAddr() net.Addr
-	WriteMsg(msg_id ProtoTypeID, b []byte) bool
-	GetUserType() int16
-	SetUserType(int16)
-	Run()
+	WriteMsg(ProtoTypeID, []byte) bool
+	RpcCall(ProtoTypeID, []byte) bool
+	MultipleMsg() ITranMsgMultiple
+	GetUserType() interface{}
+	SetUserType(interface{})
+	Run() error
 }
 
 type SessionMgr interface {
-	OnLinkerConneted(AgentID, Agent)
-	OnLinkerClosed(AgentID, Agent)
+	OnLinkerConnected(AgentID, Agent)
+	OnLinkerClosed(AgentID, Agent, error)
 }
 
 type SessionHandler interface {
@@ -87,5 +168,5 @@ type SessionHandler interface {
 }
 
 func Run() {
-	go ping_mgr.Run()
+	go pingMgr.Run()
 }

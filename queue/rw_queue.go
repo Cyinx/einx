@@ -5,14 +5,14 @@ import (
 )
 
 type RWQueue struct {
-	read_queue  *Queue
-	write_queue *Queue
+	readQueue  *Queue
+	writeQueue *Queue
 
 	queue_1 Queue
 	queue_2 Queue
 
-	read_lock  sync.Mutex
-	write_lock sync.Mutex
+	readLock  sync.Mutex
+	writeLock sync.Mutex
 }
 
 func NewRWQueue() *RWQueue {
@@ -24,83 +24,83 @@ func NewRWQueue() *RWQueue {
 	return queue
 }
 
-func (this *RWQueue) init() {
-	this.read_queue = &this.queue_1
-	this.write_queue = &this.queue_2
+func (q *RWQueue) init() {
+	q.readQueue = &q.queue_1
+	q.writeQueue = &q.queue_2
 }
 
-func (this *RWQueue) exchange() bool {
-	temp_queue := this.write_queue
+func (q *RWQueue) exchange() bool {
+	temp_queue := q.writeQueue
 	if temp_queue.empty() == true {
 		return false
 	}
-	this.write_queue = this.read_queue
-	this.read_queue = temp_queue
+	q.writeQueue = q.readQueue
+	q.readQueue = temp_queue
 	return true
 }
 
-func (this *RWQueue) Push(event interface{}) {
-	this.write_lock.Lock()
-	this.write_queue.push(event)
-	this.write_lock.Unlock()
+func (q *RWQueue) Push(event interface{}) {
+	q.writeLock.Lock()
+	q.writeQueue.push(event)
+	q.writeLock.Unlock()
 }
 
-func (this *RWQueue) Get(event_list []interface{}, count uint32) (uint32, int) {
-	this.read_lock.Lock()
+func (q *RWQueue) Get(event_list []interface{}, count uint32) (uint32, int) {
+	q.readLock.Lock()
 
-	if this.read_queue.empty() == true {
-		this.write_lock.Lock()
-		if this.exchange() == false {
-			this.write_lock.Unlock()
-			this.read_lock.Unlock()
+	if q.readQueue.empty() == true {
+		q.writeLock.Lock()
+		if q.exchange() == false {
+			q.writeLock.Unlock()
+			q.readLock.Unlock()
 			return 0, 0
 		}
-		this.write_lock.Unlock()
+		q.writeLock.Unlock()
 	}
 
-	read_queue := this.read_queue
-	var read_count uint32 = 0
-	var left_count int = 0
+	readQueue := q.readQueue
+	var readCount uint32 = 0
+	var leftCount int = 0
 	for {
-		val, ret := read_queue.pop()
+		val, ret := readQueue.pop()
 		if ret == false {
 			break
 		}
-		event_list[read_count] = val
-		read_count++
-		if read_count == count {
+		event_list[readCount] = val
+		readCount++
+		if readCount == count {
 			break
 		}
 	}
-	left_count = read_queue.count()
-	this.read_lock.Unlock()
-	return read_count, left_count
+	leftCount = readQueue.count()
+	q.readLock.Unlock()
+	return readCount, leftCount
 }
 
-func (this *RWQueue) GetOne() interface{} {
-	this.read_lock.Lock()
-	defer this.read_lock.Unlock()
+func (q *RWQueue) GetOne() interface{} {
+	q.readLock.Lock()
+	defer q.readLock.Unlock()
 
-	if this.read_queue.empty() == true {
-		this.write_lock.Lock()
-		if this.exchange() == false {
-			this.write_lock.Unlock()
+	if q.readQueue.empty() == true {
+		q.writeLock.Lock()
+		if q.exchange() == false {
+			q.writeLock.Unlock()
 			return 0
 		}
-		this.write_lock.Unlock()
+		q.writeLock.Unlock()
 	}
 
-	read_queue := this.read_queue
-	val, ret := read_queue.pop()
+	readQueue := q.readQueue
+	val, ret := readQueue.pop()
 	if ret == false {
 		return nil
 	}
 	return val
 }
 
-func (this *RWQueue) Empty() bool {
-	this.read_lock.Lock()
-	defer this.read_lock.Unlock()
+func (q *RWQueue) Empty() bool {
+	q.readLock.Lock()
+	defer q.readLock.Unlock()
 
-	return this.read_queue.empty()
+	return q.readQueue.empty()
 }

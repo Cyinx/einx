@@ -12,10 +12,11 @@ type TimerManager struct {
 	pool         *timerPool
 }
 
-var beginTick uint64 = uint64(time.Now().UnixNano() / 1e6)
+var beginTime = time.Now()
 
 func UnixTS() uint64 {
-	return uint64(time.Now().UnixNano()/1e6) - beginTick
+	tick := time.Since(beginTime).Nanoseconds()
+	return uint64(tick/1e6)
 }
 
 func NewTimerManager() *TimerManager {
@@ -78,7 +79,7 @@ func (this *TimerManager) AddTimer(delay uint64, op TimerHandler, args ...interf
 
 	this.timer_wheels[4].add_timer(xtimer)
 
-	return xtimer.get_timer_id()
+	return xtimer.getTimerId()
 }
 
 func (this *TimerManager) DeleteTimer(timerID uint64) bool {

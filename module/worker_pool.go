@@ -16,6 +16,7 @@ type WorkerPool interface {
 	RpcCall(string, ...interface{})
 	Balancer() Module
 	Const(string) Module
+	Slot(int) Module
 }
 
 type ModuleWorkerPool struct {
@@ -98,8 +99,7 @@ func (this *ModuleWorkerPool) RpcCall(name string, args ...interface{}) {
 }
 
 func (this *ModuleWorkerPool) Balancer() Module {
-	idx := this.balance_id % this.size
-	atomic.AddUint32(&this.balance_id, 1)
+	idx := atomic.AddUint32(&this.balance_id, 1) % this.size
 	return this.modules[idx]
 }
 
@@ -113,4 +113,8 @@ func (this *ModuleWorkerPool) Const(n string) Module {
 		hashkey += uint32(length)
 	}
 	return this.modules[hashkey%this.size]
+}
+
+func (this *ModuleWorkerPool) Slot(n int) Module {
+	return this.modules[uint32(n)%this.size]
 }

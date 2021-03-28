@@ -4,6 +4,7 @@ import (
 	"github.com/Cyinx/einx/agent"
 )
 
+type Agent = agent.Agent
 type ComponentID = agent.AgentID
 type ComponentType uint16
 type EventType = int
@@ -11,7 +12,7 @@ type EventType = int
 type Component interface {
 	GetID() ComponentID
 	GetType() ComponentType
-	Start()
+	Start() bool
 	Close()
 }
 

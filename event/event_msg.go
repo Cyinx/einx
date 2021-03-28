@@ -21,8 +21,10 @@ const (
 	EVENT_TCP_WRITE
 	EVENT_TCP_CLOSED
 	EVENT_MODULE_RPC
+	EVENT_MODULE_AWAITRPC
 	EVENT_COMPONENT_CREATE
 	EVENT_COMPONENT_ERROR
+	EVENT_COMPONENT_CUSTOM
 )
 
 type EventMsg interface {
@@ -37,39 +39,41 @@ type ComponentEventMsg struct {
 	Err     error
 }
 
-func (this *ComponentEventMsg) GetType() EventType {
-	return this.MsgType
+func (m *ComponentEventMsg) GetType() EventType {
+	return m.MsgType
 }
 
-func (this *ComponentEventMsg) GetSender() interface{} {
-	return this.Sender
+func (m *ComponentEventMsg) GetSender() interface{} {
+	return m.Sender
 }
 
-func (this *ComponentEventMsg) Reset() {
-	this.MsgType = 0
-	this.Sender = nil
-	this.Attach = nil
-	this.Err = nil
+func (m *ComponentEventMsg) Reset() {
+	m.MsgType = 0
+	m.Sender = nil
+	m.Attach = nil
+	m.Err = nil
 }
 
 type SessionEventMsg struct {
 	MsgType EventType
 	Sender  Agent
 	Cid     ComponentID
+	Args    []interface{}
 }
 
-func (this *SessionEventMsg) GetType() EventType {
-	return this.MsgType
+func (m *SessionEventMsg) GetType() EventType {
+	return m.MsgType
 }
 
-func (this *SessionEventMsg) GetSender() Agent {
-	return this.Sender
+func (m *SessionEventMsg) GetSender() Agent {
+	return m.Sender
 }
 
-func (this *SessionEventMsg) Reset() {
-	this.MsgType = 0
-	this.Sender = nil
-	this.Cid = 0
+func (m *SessionEventMsg) Reset() {
+	m.MsgType = 0
+	m.Sender = nil
+	m.Args = nil
+	m.Cid = 0
 }
 
 type DataEventMsg struct {
@@ -79,19 +83,19 @@ type DataEventMsg struct {
 	MsgData interface{}
 }
 
-func (this *DataEventMsg) GetType() EventType {
-	return this.MsgType
+func (m *DataEventMsg) GetType() EventType {
+	return m.MsgType
 }
 
-func (this *DataEventMsg) GetSender() Agent {
-	return this.Sender
+func (m *DataEventMsg) GetSender() Agent {
+	return m.Sender
 }
 
-func (this *DataEventMsg) Reset() {
-	this.MsgType = 0
-	this.Sender = nil
-	this.TypeID = 0
-	this.MsgData = nil
+func (m *DataEventMsg) Reset() {
+	m.MsgType = 0
+	m.Sender = nil
+	m.TypeID = 0
+	m.MsgData = nil
 }
 
 type RpcEventMsg struct {
@@ -101,23 +105,53 @@ type RpcEventMsg struct {
 	Data    []interface{}
 }
 
-func (this *RpcEventMsg) GetType() EventType {
-	return this.MsgType
+func (m *RpcEventMsg) GetType() EventType {
+	return m.MsgType
 }
 
-func (this *RpcEventMsg) GetSender() Agent {
-	return this.Sender
+func (m *RpcEventMsg) GetSender() Agent {
+	return m.Sender
 }
 
-func (this *RpcEventMsg) Reset() {
-	this.MsgType = 0
-	this.Sender = nil
-	this.RpcName = ""
-	this.Data = nil
+func (m *RpcEventMsg) Reset() {
+	m.MsgType = 0
+	m.Sender = nil
+	m.RpcName = ""
+	m.Data = nil
+}
+
+type CustomActionEventMsg interface {
+	GetType() EventType
+	GetSender() Agent
+	GetAction() func(CustomActionEventMsg)
 }
 
 type EventReceiver interface {
-	PostEvent(EventType, Agent, ComponentID)
+	PostEvent(EventType, Agent, ComponentID, ...interface{})
 	PostData(EventType, ProtoTypeID, Agent, interface{})
 	PushEventMsg(ev EventMsg)
+}
+
+type AwaitRpcEventMsg struct {
+	MsgType EventType
+	Sender  Agent
+	RpcName string
+	Data    []interface{}
+	Await   chan []interface{}
+}
+
+func (m *AwaitRpcEventMsg) GetType() EventType {
+	return m.MsgType
+}
+
+func (m *AwaitRpcEventMsg) GetSender() Agent {
+	return m.Sender
+}
+
+func (m *AwaitRpcEventMsg) Reset() {
+	m.MsgType = 0
+	m.Sender = nil
+	m.RpcName = ""
+	m.Data = nil
+	m.Await = nil
 }

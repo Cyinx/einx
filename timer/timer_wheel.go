@@ -51,7 +51,7 @@ func (this *timerWheel) add_timer(timer *xtimer) {
 
 	idx := uint8(this.index + this.tickIdxDelta(timer.runTick))
 	timer_list := this.array[idx]
-	timer_list.add_timer(timer)
+	timer_list.addTimer(timer)
 	this.timerCount++
 }
 
@@ -61,7 +61,7 @@ func (this *timerWheel) delete_timer(run_tick uint64, seq_id uint32) bool {
 	}
 	idx := (this.index + uint8(this.tickIdxDelta(run_tick)))
 	timer_list := this.array[idx]
-	success := timer_list.delete_timer(seq_id)
+	success := timer_list.deleteTimer(seq_id)
 	this.timerCount--
 	return success
 }
